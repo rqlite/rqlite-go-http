@@ -299,11 +299,27 @@ func (c *Client) addQueryParams(base string, params map[string]string) (string, 
 // doRequest builds and executes an HTTP request, returning the response.
 // This can handle setting Content-Type, attaching the context, etc.
 func (c *Client) doRequest(ctx context.Context, method, url string, body io.Reader, headers map[string]string) (*http.Response, error) {
-    // 1. Create new request with http.NewRequestWithContext
-    // 2. Apply headers to the request
-    // 3. Execute via c.httpClient.Do(...)
-    // 4. Return the *http.Response to caller
-    return nil, nil
+    req, err := http.NewRequestWithContext(ctx, method, url, body)
+    if err != nil {
+        return nil, err
+    }
+
+    // Add any passed-in headers
+    for k, v := range headers {
+        req.Header.Set(k, v)
+    }
+
+    // If Basic Auth is configured, add an Authorization header
+    if c.basicAuthUser != "" || c.basicAuthPass != "" {
+        auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.basicAuthUser, c.basicAuthPass)))
+        req.Header.Set("Authorization", "Basic "+auth)
+    }
+
+    resp, err := c.httpClient.Do(req)
+    if err != nil {
+        return nil, err
+    }
+    return resp, nil
 }
 
 // decodeJSONResponse reads and unmarshals JSON from r into dest.
