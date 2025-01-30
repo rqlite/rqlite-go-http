@@ -55,9 +55,102 @@ func (c *Client) Request(ctx context.Context, statements []SQLStatement, opts Re
     return nil, nil
 }
 
+
+// -------------------------------------------------------------
+// Backup
+// -------------------------------------------------------------
+
+// Backup requests a copy of the SQLite database (or a SQL text dump) from the node.
+// The returned data can be saved to disk or processed in memory.
+//
+// This method issues a GET request to /db/backup. If opts.Fmt == "sql", it requests
+// a SQL text dump instead of a binary SQLite file.
+func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser, error) {
+    // 1. Build the URL from c.baseURL + "/db/backup".
+    // 2. Add query parameters as indicated by opts.
+    // 3. Create an HTTP GET request.
+    // 4. Return the response body (io.ReadCloser) if successful.
+
+    return nil, nil
+}
+
+// BackupOptions holds optional parameters for a backup operation.
+type BackupOptions struct {
+    // Fmt can be "sql" if a SQL text dump is desired, otherwise an empty string
+    // (or something else) means a binary SQLite file is returned.
+    Fmt string
+
+    // If set, request that the backup be vacuumed before returning it.
+    // e.g. /db/backup?vacuum
+    Vacuum bool
+
+    // If set, request that the backup be GZIP-compressed.
+    // e.g. /db/backup?compress
+    Compress bool
+
+    // If set, ask a Follower not to forward the request to the Leader.
+    // e.g. /db/backup?noleader
+    NoLeader bool
+
+    // If set, instruct a Follower to return a redirect instead of forwarding.
+    // e.g. /db/backup?redirect
+    Redirect bool
+}
+
+// -------------------------------------------------------------
+// Restore (Load or Boot)
+// -------------------------------------------------------------
+
+// Load streams data from r into the node, to load or restore data. Depending on opts.Format,
+// the data can be a raw SQLite file (application/octet-stream) or a text dump (text/plain).
+//
+// This corresponds to a POST request to /db/load.
+func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error {
+    // 1. Build the URL from c.baseURL + "/db/load".
+    // 2. Add any query parameters (e.g. redirect if desired).
+    // 3. Issue a POST with the appropriate Content-Type:
+    //    - application/octet-stream for a raw SQLite file
+    //    - text/plain for a SQL dump
+    // 4. Upload the data from r.
+    // 5. Handle HTTP status codes and parse any JSON error response if needed.
+
+    return nil
+}
+
+// Boot streams a raw SQLite file into a single-node system, effectively initializing
+// the underlying SQLite store from scratch. This is done via a POST to /boot.
+func (c *Client) Boot(ctx context.Context, r io.Reader, opts BootOptions) error {
+    // 1. Build the URL from c.baseURL + "/boot".
+    // 2. Issue a POST with Transfer-Encoding: chunked or a known Content-Length.
+    // 3. The data must be a binary SQLite file. The official doc shows usage:
+    //      curl -XPOST 'http://localhost:4001/boot' --upload-file mydb.sqlite
+    // 4. Check for HTTP status codes or JSON error messages.
+
+    return nil
+}
+
 // Close can clean up any long-lived resources owned by the Client, if needed.
 func (c *Client) Close() error {
     return nil
+}
+
+// LoadOptions configures how to load data into the node.
+type LoadOptions struct {
+    // Format can be "binary" or "sql" etc.
+    // - "binary" -> application/octet-stream
+    // - "sql"    -> text/plain
+    Format string
+
+    // If set, instruct a Follower to return a redirect instead of forwarding.
+    // e.g. /db/load?redirect
+    Redirect bool
+}
+
+// BootOptions configures how to boot a single-node system.
+type BootOptions struct {
+    // Potential expansions (for instance, forcing a redirect or not).
+    // Usually /boot is only relevant for a single-node system, so
+    // there's not too much to configure.
 }
 
 // SQLStatement represents a single SQL statement, possibly with parameters.
