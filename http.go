@@ -177,6 +177,10 @@ type ExecuteOptions struct {
     // Additional query parameters like "pretty" or "timings" can be added here as needed.
     Pretty  bool
     Timings bool
+
+    Queue       bool   // If true, add ?queue
+    Wait        bool   // If true, also add &wait
+    WaitTimeout string // If non-empty, add &timeout=<value>, e.g. "10s"
 }
 
 // QueryOptions holds optional settings for /db/query requests.
@@ -211,6 +215,7 @@ type RequestOptions struct {
 type ExecuteResponse struct {
     Results []ExecuteResult `json:"results"`
     Time    float64         `json:"time"`
+    SequenceNumber int64   `json:"sequence_number,omitempty"`
 }
 
 // ExecuteResult is an element of ExecuteResponse.Results.
