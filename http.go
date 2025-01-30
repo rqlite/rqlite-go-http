@@ -273,3 +273,45 @@ type RequestResult struct {
     // If associative form is requested, you could define a special type for that case,
     // or include an alternative representation of rows here.
 }
+
+// addQueryParams takes a base URL (like "http://localhost:4001/db/query")
+// and a map of query key-value pairs. It returns the complete URL with
+// encoded parameters, for example:
+//   "http://localhost:4001/db/query?level=weak&pretty&timings"
+func (c *Client) addQueryParams(base string, params map[string]string) (string, error) {
+    // 1. Parse baseURL
+    // 2. Add query params from the map
+    // 3. Return combined URL
+    return "", nil
+}
+
+// doRequest builds and executes an HTTP request, returning the response.
+// This can handle setting Content-Type, attaching the context, etc.
+func (c *Client) doRequest(ctx context.Context, method, url string, body io.Reader, headers map[string]string) (*http.Response, error) {
+    // 1. Create new request with http.NewRequestWithContext
+    // 2. Apply headers to the request
+    // 3. Execute via c.httpClient.Do(...)
+    // 4. Return the *http.Response to caller
+    return nil, nil
+}
+
+// decodeJSONResponse reads and unmarshals JSON from r into dest.
+// This can be used by Query, Execute, etc., to parse responses consistently.
+func decodeJSONResponse(r io.Reader, dest interface{}) error {
+    // 1. Read all or use JSON decoder
+    // 2. Unmarshal into dest
+    // 3. Return any errors
+    return nil
+}
+
+// marshalStatementsToJSON is one place to handle the "SQL statements array" format
+// required by rqlite for both /db/query and /db/execute, rather than duplicating
+// that logic in multiple places. 
+func marshalStatementsToJSON(statements []SQLStatement) ([]byte, error) {
+    // 1. Build an array of interface{} representing each statement
+    //    If a statement has PositionalParams or NamedParams, represent
+    //    it as [SQL, param1, param2] or [SQL, { "name": "foo", "value": 5 }] etc.
+    // 2. json.Marshal(...)
+    return nil, nil
+}
+
