@@ -196,6 +196,11 @@ type QueryOptions struct {
 
     // BlobAsArray signals whether to request the BLOB data as arrays of byte values.
     BlobAsArray bool
+
+    Level               string // "weak" (default), "linearizable", "strong", "none", or "auto".
+    LinearizableTimeout string // e.g. "1s" if level=linearizable.
+    Freshness           string // e.g. "1s" if level=none.
+    FreshnessStrict     bool   // if true, adds &freshness_strict.
 }
 
 // RequestOptions holds optional settings for /db/request requests.
@@ -209,6 +214,11 @@ type RequestOptions struct {
     Timings     bool
     Associative bool
     BlobAsArray bool
+
+    Level               string // "weak" (default), "linearizable", "strong", "none", or "auto".
+    LinearizableTimeout string // e.g. "1s" if level=linearizable.
+    Freshness           string // e.g. "1s" if level=none.
+    FreshnessStrict     bool   // if true, adds &freshness_strict.
 }
 
 // ExecuteResponse represents the JSON returned by /db/execute.
