@@ -19,6 +19,10 @@ type Client struct {
     // defaultParams are parameters like `pretty`, `timings`, or custom headers that apply to all requests.
     // You may override or add to them on a per-request basis.
     defaultParams map[string]string
+
+    // Fields for optional Basic Auth
+    basicAuthUser string
+    basicAuthPass string
 }
 
 // NewClient creates a new Client with default settings.
@@ -32,6 +36,13 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
         httpClient:  httpClient,
         defaultParams: make(map[string]string),
     }
+}
+
+// SetBasicAuth configures the client to use Basic Auth for all subsequent requests.
+// Pass empty strings to disable Basic Auth.
+func (c *Client) SetBasicAuth(username, password string) {
+    c.basicAuthUser = username
+    c.basicAuthPass = password
 }
 
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE, or DDL) using /db/execute.
