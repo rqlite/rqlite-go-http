@@ -8,9 +8,10 @@ jobs:
     steps:
       # Checkout the code as the first step.
       - checkout
-      - run:
-          name: "Say hello"
-          command: "echo Hello, World!"
+      - run: go version
+      - run: test -z "$(gofmt -l . | tee /dev/stderr)"
+      - run: go vet ./...
+      - run: go test -v ./...
 
 workflows:
   test-workflow:
