@@ -1,7 +1,7 @@
 package rqlitehttp
 
 import (
-	"http"
+	"net/http"
 )
 
 // NewTLSClient returns an HTTP client configured for simple TLS, using a CA cert
@@ -11,7 +11,7 @@ func NewTLSClient(caCertPath string, skipVerify bool) (*http.Client, error) {
 	// Build *tls.Config
 	// Create *http.Transport
 	// Return a new *http.Client with that transport
-	return &http.Client{Transport: transport}, nil
+	return &http.Client{}, nil
 }
 
 // NewMutualTLSClient returns an HTTP client configured for mutual TLS.
@@ -22,5 +22,5 @@ func NewMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string, skipVe
 	// Build *tls.Config with certificate and possibly skipVerify set
 	// Create *http.Transport
 	// Return a new *http.Client with that transport
-	return &http.Client{Transport: transport}, nil
+	return &http.Client{}, nil
 }

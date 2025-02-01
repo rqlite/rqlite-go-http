@@ -2,6 +2,9 @@ package rqlitehttp
 
 import (
 	"context"
+	"encoding/base64"
+	"fmt"
+	"io"
 	"net/http"
 	"time"
 )
