@@ -8,24 +8,11 @@ import (
 )
 
 func Test_NewClient(t *testing.T) {
-	// Create a new HTTP client
 	client := NewClient("http://localhost:4001", nil)
-
-	// Check that the client is not nil
 	if client == nil {
 		t.Error("Expected client to be non-nil")
 	}
-}
-
-func Test_Client_Close(t *testing.T) {
-	// Create a new HTTP client
-	client := NewClient("http://localhost:4001", nil)
-
-	// Close the client
-	err := client.Close()
-
-	// Check that there was no error
-	if err != nil {
+	if err := client.Close(); err != nil {
 		t.Errorf("Expected nil error, got %v", err)
 	}
 }
@@ -56,22 +43,23 @@ func Test_BasicAuth(t *testing.T) {
 	}))
 
 	client := NewClient(ts.URL, nil)
-	err := client.Status(context.Background())
-	if err != nil {
+	if err := client.Status(context.Background()); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 
 	client.SetBasicAuth(username, password)
 	authExp = true
-	err = client.Status(context.Background())
-	if err != nil {
+	if err := client.Status(context.Background()); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 
 	client.SetBasicAuth("", "")
 	authExp = false
-	err = client.Status(context.Background())
-	if err != nil {
+	if err := client.Status(context.Background()); err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+
+	if err := client.Close(); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 }
