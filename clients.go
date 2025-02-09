@@ -1,7 +1,10 @@
 package http
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"net/http"
+	"os"
 	"time"
 )
 
@@ -10,23 +13,67 @@ func DefaultClient() *http.Client {
 	return &http.Client{Timeout: 5 * time.Second}
 }
 
-// NewTLSClient returns an HTTP client configured for simple TLS, using a CA cert
-// and optionally skipping server certificate verification.
-func NewTLSClient(caCertPath string, skipVerify bool) (*http.Client, error) {
-	// Load CA cert
-	// Build *tls.Config
-	// Create *http.Transport
-	// Return a new *http.Client with that transport
-	return &http.Client{}, nil
+// NewTLSClientInsecure returns an HTTP client configured for simple TLS, but
+// skipping server certificate verification.
+func NewTLSClientInsecure(skipVerify bool) (*http.Client, error) {
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify: true,
+			},
+		},
+		Timeout: 5 * time.Second,
+	}, nil
+}
+
+// NewTLSClient returns an HTTP client configured for simple TLS, using the
+// provided CA certificate.
+func NewTLSClient(caCertPath string) (*http.Client, error) {
+	config := &tls.Config{}
+
+	asn1Data, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return nil, err
+	}
+	config.RootCAs = x509.NewCertPool()
+	ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+	if !ok {
+		return nil, err
+	}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: config,
+		},
+		Timeout: 5 * time.Second,
+	}, nil
 }
 
 // NewMutualTLSClient returns an HTTP client configured for mutual TLS.
-// It accepts paths for the client cert, client key, and trusted CA, plus
-// a skipVerify option.
-func NewMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string, skipVerify bool) (*http.Client, error) {
-	// Load certificates
-	// Build *tls.Config with certificate and possibly skipVerify set
-	// Create *http.Transport
-	// Return a new *http.Client with that transport
-	return &http.Client{}, nil
+// It accepts paths for the client cert, client key, and trusted CA.
+func NewMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string) (*http.Client, error) {
+	config := &tls.Config{}
+
+	asn1Data, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return nil, err
+	}
+	config.RootCAs = x509.NewCertPool()
+	ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
+	if !ok {
+		return nil, err
+	}
+
+	cert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
+	if err != nil {
+		return nil, err
+	}
+	config.Certificates = []tls.Certificate{cert}
+
+	return &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: config,
+		},
+		Timeout: 5 * time.Second,
+	}, nil
 }
