@@ -13,8 +13,6 @@ import (
 
 // Client is the main type through which rqlite is accessed.
 type Client struct {
-	// httpClient is used for all HTTP requests.
-	// A user may override it to customize timeouts, TLS, etc.
 	httpClient *http.Client
 
 	executeURL string
@@ -25,7 +23,6 @@ type Client struct {
 	bootURL    string
 	statusURL  string
 
-	// Fields for optional Basic Auth
 	basicAuthUser string
 	basicAuthPass string
 }
