@@ -8,10 +8,10 @@ type SQLStatement struct {
 	SQL string
 
 	// PositionalParams is a slice of values for placeholders (?), if used.
-	PositionalParams []interface{}
+	PositionalParams []any
 
 	// NamedParams is a map of parameter names to values, if using named placeholders.
-	NamedParams map[string]interface{}
+	NamedParams map[string]any
 }
 
 // MarshalJSON implements a custom JSON representation so that SQL statements
@@ -19,13 +19,13 @@ type SQLStatement struct {
 func (s SQLStatement) MarshalJSON() ([]byte, error) {
 	if len(s.NamedParams) > 0 {
 		// e.g. ["INSERT INTO foo(name, age) VALUES(:name, :age)", { "name": "...", "age": ... }]
-		arr := []interface{}{s.SQL, s.NamedParams}
+		arr := []any{s.SQL, s.NamedParams}
 		return json.Marshal(arr)
 	}
 
 	if len(s.PositionalParams) > 0 {
 		// e.g. ["INSERT INTO foo(name, age) VALUES(?, ?)", "param1", 123, ...]
-		arr := make([]interface{}, 1, 1+len(s.PositionalParams))
+		arr := make([]any, 1, 1+len(s.PositionalParams))
 		arr[0] = s.SQL
 		arr = append(arr, s.PositionalParams...)
 		return json.Marshal(arr)

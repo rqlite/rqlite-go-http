@@ -224,11 +224,11 @@ type QueryResponse struct {
 
 // QueryResult is an element of QueryResponse.Results.
 type QueryResult struct {
-	Columns []string        `json:"columns,omitempty"`
-	Types   []string        `json:"types,omitempty"`
-	Values  [][]interface{} `json:"values,omitempty"`
-	Time    float64         `json:"time,omitempty"`
-	Error   string          `json:"error,omitempty"`
+	Columns []string `json:"columns,omitempty"`
+	Types   []string `json:"types,omitempty"`
+	Values  [][]any  `json:"values,omitempty"`
+	Time    float64  `json:"time,omitempty"`
+	Error   string   `json:"error,omitempty"`
 }
 
 // RequestResponse represents the JSON returned by /db/request.
@@ -243,13 +243,13 @@ type RequestResult struct {
 	// Same fields as QueryResult plus ExecuteResult fields.
 	// If read-only, LastInsertID and RowsAffected would be empty;
 	// if write-only, Columns and Values would be empty.
-	Columns      []string        `json:"columns,omitempty"`
-	Types        []string        `json:"types,omitempty"`
-	Values       [][]interface{} `json:"values,omitempty"`
-	LastInsertID *int64          `json:"last_insert_id,omitempty"`
-	RowsAffected *int64          `json:"rows_affected,omitempty"`
-	Error        string          `json:"error,omitempty"`
-	Time         float64         `json:"time,omitempty"`
+	Columns      []string `json:"columns,omitempty"`
+	Types        []string `json:"types,omitempty"`
+	Values       [][]any  `json:"values,omitempty"`
+	LastInsertID *int64   `json:"last_insert_id,omitempty"`
+	RowsAffected *int64   `json:"rows_affected,omitempty"`
+	Error        string   `json:"error,omitempty"`
+	Time         float64  `json:"time,omitempty"`
 	// If associative form is requested, you could define a special type for that case,
 	// or include an alternative representation of rows here.
 }
