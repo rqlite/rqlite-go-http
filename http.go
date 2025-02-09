@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"time"
+	"net/url"
 )
 
 // Client is the main type through which rqlite is accessed.
@@ -17,30 +17,34 @@ type Client struct {
 	// A user may override it to customize timeouts, TLS, etc.
 	httpClient *http.Client
 
-	// baseURL is the HTTP address of a single rqlite node (for example "http://localhost:4001").
-	// You may implement logic to discover or switch nodes in case of network errors or cluster changes.
-	baseURL string
-
-	// defaultParams are parameters like `pretty`, `timings`, or custom headers that apply to all requests.
-	// You may override or add to them on a per-request basis.
-	defaultParams map[string]string
+	executeURL string
+	queryURL   string
+	requestURL string
+	backupURL  string
+	loadURL    string
+	bootURL    string
 
 	// Fields for optional Basic Auth
 	basicAuthUser string
 	basicAuthPass string
 }
 
-// NewClient creates a new Client with default settings.
+// NewClient creates a new Client with default settings. If httpClient is nil,
+// the the default client is used.
 func NewClient(baseURL string, httpClient *http.Client) *Client {
-	if httpClient == nil {
-		httpClient = &http.Client{Timeout: 10 * time.Second}
+	cl := &Client{
+		httpClient: httpClient,
+		executeURL: baseURL + "/db/execute",
+		queryURL:   baseURL + "/db/query",
+		requestURL: baseURL + "/db/request",
+		backupURL:  baseURL + "/db/backup",
+		loadURL:    baseURL + "/db/load",
+		bootURL:    baseURL + "/boot",
 	}
-
-	return &Client{
-		baseURL:       baseURL,
-		httpClient:    httpClient,
-		defaultParams: make(map[string]string),
+	if cl.httpClient == nil {
+		cl.httpClient = DefaultClient()
 	}
+	return cl
 }
 
 // SetBasicAuth configures the client to use Basic Auth for all subsequent requests.
@@ -61,16 +65,7 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts Exe
 		return nil, err
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/db/execute"+queryParams.Encode(), bytes.NewReader(body))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	if c.basicAuthUser != "" || c.basicAuthPass != "" {
-		req.SetBasicAuth(c.basicAuthUser, c.basicAuthPass)
-	}
-
-	resp, err := c.httpClient.Do(req)
+	resp, err := c.doRequest(ctx, "POST", c.executeURL, queryParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -92,18 +87,67 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts Exe
 	return &executeResp, nil
 }
 
-// Query performs a read operation (SELECT) using /db/query. The statements can be passed as
-// SQL strings or parameterized statements. The user may set query parameters in opts.
-func (c *Client) Query(ctx context.Context, statements []SQLStatement, opts QueryOptions) (*QueryResponse, error) {
-	// Implementation to be added
-	return nil, nil
+// Query performs a read operation (SELECT) using /db/query.
+func (c *Client) Query(ctx context.Context, statements SQLStatements, opts QueryOptions) (*QueryResponse, error) {
+	body, err := statements.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	queryParams, err := MakeURLValues(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest(ctx, "POST", c.queryURL, queryParams, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, respBody)
+	}
+
+	var queryResponse QueryResponse
+	if err := json.Unmarshal(respBody, &queryResponse); err != nil {
+		return nil, err
+	}
+	return &queryResponse, nil
 }
 
 // Request sends both read and write statements in a single request using /db/request.
 // This method determines read vs. write by inspecting the statements.
-func (c *Client) Request(ctx context.Context, statements []SQLStatement, opts RequestOptions) (*RequestResponse, error) {
-	// Implementation to be added
-	return nil, nil
+func (c *Client) Request(ctx context.Context, statements SQLStatements, opts RequestOptions) (*RequestResponse, error) {
+	body, err := statements.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	reqParams, err := MakeURLValues(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.doRequest(ctx, "POST", c.requestURL, reqParams, bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, respBody)
+	}
+
+	var reqResp RequestResponse
+	if err := json.Unmarshal(respBody, &reqResp); err != nil {
+		return nil, err
+	}
+	return &reqResp, nil
 }
 
 // -------------------------------------------------------------
@@ -214,30 +258,13 @@ type RequestResult struct {
 	// or include an alternative representation of rows here.
 }
 
-// addQueryParams takes a base URL (like "http://localhost:4001/db/query")
-// and a map of query key-value pairs. It returns the complete URL with
-// encoded parameters, for example:
-//
-//	"http://localhost:4001/db/query?level=weak&pretty&timings"
-func (c *Client) addQueryParams(base string, params map[string]string) (string, error) {
-	// 1. Parse baseURL
-	// 2. Add query params from the map
-	// 3. Return combined URL
-	return "", nil
-}
-
 // doRequest builds and executes an HTTP request, returning the response.
-// This can handle setting Content-Type, attaching the context, etc.
-func (c *Client) doRequest(ctx context.Context, method, url string, body io.Reader, headers map[string]string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url, body)
+func (c *Client) doRequest(ctx context.Context, method, url string, values url.Values, body io.Reader) (*http.Response, error) {
+	req, err := http.NewRequestWithContext(ctx, method, url+"?"+values.Encode(), body)
 	if err != nil {
 		return nil, err
 	}
-
-	// Add any passed-in headers
-	for k, v := range headers {
-		req.Header.Set(k, v)
-	}
+	req.Header.Set("Content-Type", "application/json")
 
 	// If Basic Auth is configured, add an Authorization header
 	if c.basicAuthUser != "" || c.basicAuthPass != "" {
@@ -250,13 +277,4 @@ func (c *Client) doRequest(ctx context.Context, method, url string, body io.Read
 		return nil, err
 	}
 	return resp, nil
-}
-
-// decodeJSONResponse reads and unmarshals JSON from r into dest.
-// This can be used by Query, Execute, etc., to parse responses consistently.
-func decodeJSONResponse(r io.Reader, dest interface{}) error {
-	// 1. Read all or use JSON decoder
-	// 2. Unmarshal into dest
-	// 3. Return any errors
-	return nil
 }

@@ -2,7 +2,13 @@ package rqlitehttp
 
 import (
 	"net/http"
+	"time"
 )
+
+// DefaultClient returns an HTTP client with a 5-second timeout.
+func DefaultClient() *http.Client {
+	return &http.Client{Timeout: 5 * time.Second}
+}
 
 // NewTLSClient returns an HTTP client configured for simple TLS, using a CA cert
 // and optionally skipping server certificate verification.

@@ -3,6 +3,7 @@ package rqlitehttp
 import (
 	"reflect"
 	"testing"
+	"time"
 )
 
 func Test_MakeURLValues(t *testing.T) {
@@ -84,12 +85,13 @@ func Test_MakeURLValues(t *testing.T) {
 
 	t.Run("StructWithAllSupportedTypes", func(t *testing.T) {
 		type AllTypes struct {
-			Str   string `uvalue:"str"`
-			Bln   bool   `uvalue:"bln"`
-			IVal  int    `uvalue:"iVal"`
-			I64   int64  `uvalue:"i64"`
-			U64   uint64 `uvalue:"u64"`
-			NoTag string // This field is not tagged
+			Str   string        `uvalue:"str"`
+			Bln   bool          `uvalue:"bln"`
+			IVal  int           `uvalue:"iVal"`
+			I64   int64         `uvalue:"i64"`
+			U64   uint64        `uvalue:"u64"`
+			Dur   time.Duration `uvalue:"dur"`
+			NoTag string        // This field is not tagged
 		}
 		at := &AllTypes{
 			Str:   "sample",
@@ -97,6 +99,7 @@ func Test_MakeURLValues(t *testing.T) {
 			IVal:  -999,
 			I64:   1234567890123,
 			U64:   9999999999999999999,
+			Dur:   5 * time.Second,
 			NoTag: "secret",
 		}
 		vals, err := MakeURLValues(at)
@@ -104,8 +107,8 @@ func Test_MakeURLValues(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if len(vals) != 5 {
-			t.Fatalf("expected 5 values, got: %v", vals)
+		if len(vals) != 6 {
+			t.Fatalf("expected 6 values, got: %v", vals)
 		}
 
 		checks := []struct {
@@ -118,6 +121,7 @@ func Test_MakeURLValues(t *testing.T) {
 			{"iVal", "-999", "int field"},
 			{"i64", "1234567890123", "int64 field"},
 			{"u64", "9999999999999999999", "uint64 field"},
+			{"dur", "5s", "time.Duration field"},
 		}
 		for _, c := range checks {
 			got := vals.Get(c.key)

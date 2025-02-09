@@ -1,5 +1,7 @@
 package rqlitehttp
 
+import "time"
+
 // BackupOptions holds optional parameters for a backup operation.
 type BackupOptions struct {
 	// Fmt can be "sql" if a SQL text dump is desired, otherwise an empty string
@@ -61,27 +63,27 @@ type ExecuteOptions struct {
 
 	// Timeout after which if Wait is set, the system should respond with an error if
 	// the request has not been persisted.
-	Timeout string `uvalue:"timeout"`
+	Timeout time.Duration `uvalue:"timeout"`
 }
 
 // QueryOptions holds optional settings for /db/query requests.
 type QueryOptions struct {
 	// Timeout is applied at the database level.
-	Timeout string
+	Timeout time.Duration `uvalue:"timeout"`
 
-	Pretty  bool
-	Timings bool
+	Pretty  bool `uvalue:"pretty"`
+	Timings bool `uvalue:"timings"`
 
 	// Associative signals whether to request the "associative" form of results.
-	Associative bool
+	Associative bool `uvalue:"associative"`
 
 	// BlobAsArray signals whether to request the BLOB data as arrays of byte values.
-	BlobAsArray bool
+	BlobAsArray bool `uvalue:"blob_array"`
 
-	Level               string // "weak" (default), "linearizable", "strong", "none", or "auto".
-	LinearizableTimeout string // e.g. "1s" if level=linearizable.
-	Freshness           string // e.g. "1s" if level=none.
-	FreshnessStrict     bool   // if true, adds &freshness_strict.
+	Level               string        `uvalue:"level"`
+	LinearizableTimeout time.Duration `uvalue:"linearizable_timeout"`
+	Freshness           time.Duration `uvalue:"freshness"`
+	FreshnessStrict     bool          `uvalue:"freshness_strict"`
 }
 
 // RequestOptions holds optional settings for /db/request requests.

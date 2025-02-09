@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"time"
 )
 
 // MakeURLValues converts a struct to a url.Values, using the `uvalue` tag to
@@ -46,24 +47,27 @@ func MakeURLValues(input any) (url.Values, error) {
 		}
 
 		var strVal string
-		switch fieldValue.Kind() {
-		case reflect.String:
-			strVal = fieldValue.Interface().(string)
-		case reflect.Bool:
-			b := fieldValue.Interface().(bool)
-			strVal = strconv.FormatBool(b)
-		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-			i := fieldValue.Int()
-			strVal = strconv.FormatInt(i, 10)
-		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
-			u := fieldValue.Uint()
-			strVal = strconv.FormatUint(u, 10)
-		default:
-			continue
+		if fieldValue.Type() == reflect.TypeOf(time.Duration(0)) {
+			d := fieldValue.Interface().(time.Duration)
+			strVal = d.String()
+		} else {
+			switch fieldValue.Kind() {
+			case reflect.String:
+				strVal = fieldValue.Interface().(string)
+			case reflect.Bool:
+				b := fieldValue.Interface().(bool)
+				strVal = strconv.FormatBool(b)
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+				i := fieldValue.Int()
+				strVal = strconv.FormatInt(i, 10)
+			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+				u := fieldValue.Uint()
+				strVal = strconv.FormatUint(u, 10)
+			default:
+				continue
+			}
 		}
-
 		vals.Add(tagVal, strVal)
 	}
-
 	return vals, nil
 }
