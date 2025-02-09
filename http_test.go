@@ -23,6 +23,10 @@ func Test_BasicAuth(t *testing.T) {
 
 	authExp := false
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/status" {
+			t.Fatalf("Unexpected path: %s", r.URL.Path)
+		}
+
 		user, pass, ok := r.BasicAuth()
 		if !authExp {
 			if ok {
