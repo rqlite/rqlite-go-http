@@ -1,8 +1,10 @@
 package rqlitehttp
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -48,11 +50,46 @@ func (c *Client) SetBasicAuth(username, password string) {
 	c.basicAuthPass = password
 }
 
-// Execute executes one or more SQL statements (INSERT, UPDATE, DELETE, or DDL) using /db/execute.
-// The statements parameter is a slice of SQL statements, which can contain parameter placeholders if needed.
-func (c *Client) Execute(ctx context.Context, statements []SQLStatement, opts ExecuteOptions) (*ExecuteResponse, error) {
-	// Implementation to be added
-	return nil, nil
+// Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
+func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts ExecuteOptions) (*ExecuteResponse, error) {
+	body, err := statements.MarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	queryParams, err := MakeURLValues(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, "POST", c.baseURL+"/db/execute"+queryParams.Encode(), bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if c.basicAuthUser != "" || c.basicAuthPass != "" {
+		req.SetBasicAuth(c.basicAuthUser, c.basicAuthPass)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, respBody)
+	}
+
+	var executeResp ExecuteResponse
+	if err := json.Unmarshal(respBody, &executeResp); err != nil {
+		return nil, err
+	}
+	return &executeResp, nil
 }
 
 // Query performs a read operation (SELECT) using /db/query. The statements can be passed as
@@ -85,29 +122,6 @@ func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser,
 	// 4. Return the response body (io.ReadCloser) if successful.
 
 	return nil, nil
-}
-
-// BackupOptions holds optional parameters for a backup operation.
-type BackupOptions struct {
-	// Fmt can be "sql" if a SQL text dump is desired, otherwise an empty string
-	// (or something else) means a binary SQLite file is returned.
-	Fmt string
-
-	// If set, request that the backup be vacuumed before returning it.
-	// e.g. /db/backup?vacuum
-	Vacuum bool
-
-	// If set, request that the backup be GZIP-compressed.
-	// e.g. /db/backup?compress
-	Compress bool
-
-	// If set, ask a Follower not to forward the request to the Leader.
-	// e.g. /db/backup?noleader
-	NoLeader bool
-
-	// If set, instruct a Follower to return a redirect instead of forwarding.
-	// e.g. /db/backup?redirect
-	Redirect bool
 }
 
 // -------------------------------------------------------------
@@ -145,93 +159,6 @@ func (c *Client) Boot(ctx context.Context, r io.Reader, opts BootOptions) error 
 // Close can clean up any long-lived resources owned by the Client, if needed.
 func (c *Client) Close() error {
 	return nil
-}
-
-// LoadOptions configures how to load data into the node.
-type LoadOptions struct {
-	// Format can be "binary" or "sql" etc.
-	// - "binary" -> application/octet-stream
-	// - "sql"    -> text/plain
-	Format string
-
-	// If set, instruct a Follower to return a redirect instead of forwarding.
-	// e.g. /db/load?redirect
-	Redirect bool
-}
-
-// BootOptions configures how to boot a single-node system.
-type BootOptions struct {
-	// Potential expansions (for instance, forcing a redirect or not).
-	// Usually /boot is only relevant for a single-node system, so
-	// there's not too much to configure.
-}
-
-// SQLStatement represents a single SQL statement, possibly with parameters.
-type SQLStatement struct {
-	// SQL is the text of the SQL statement, for example "INSERT INTO foo VALUES(?)".
-	SQL string
-
-	// PositionalParams is a slice of values for placeholders (?), if used.
-	PositionalParams []interface{}
-
-	// NamedParams is a map of parameter names to values, if using named placeholders.
-	NamedParams map[string]interface{}
-}
-
-// ExecuteOptions holds optional settings for /db/execute requests.
-type ExecuteOptions struct {
-	// Transaction indicates whether statements should be enclosed in a transaction.
-	Transaction bool
-
-	// Timeout is applied at the database level, for example "2s".
-	// Internally this might translate to the `db_timeout` query parameter.
-	Timeout string
-
-	// Additional query parameters like "pretty" or "timings" can be added here as needed.
-	Pretty  bool
-	Timings bool
-
-	Queue       bool   // If true, add ?queue
-	Wait        bool   // If true, also add &wait
-	WaitTimeout string // If non-empty, add &timeout=<value>, e.g. "10s"
-}
-
-// QueryOptions holds optional settings for /db/query requests.
-type QueryOptions struct {
-	// Timeout is applied at the database level.
-	Timeout string
-
-	Pretty  bool
-	Timings bool
-
-	// Associative signals whether to request the "associative" form of results.
-	Associative bool
-
-	// BlobAsArray signals whether to request the BLOB data as arrays of byte values.
-	BlobAsArray bool
-
-	Level               string // "weak" (default), "linearizable", "strong", "none", or "auto".
-	LinearizableTimeout string // e.g. "1s" if level=linearizable.
-	Freshness           string // e.g. "1s" if level=none.
-	FreshnessStrict     bool   // if true, adds &freshness_strict.
-}
-
-// RequestOptions holds optional settings for /db/request requests.
-type RequestOptions struct {
-	// Transaction indicates whether statements should be enclosed in a transaction.
-	Transaction bool
-
-	// Timeout is applied at the database level.
-	Timeout     string
-	Pretty      bool
-	Timings     bool
-	Associative bool
-	BlobAsArray bool
-
-	Level               string // "weak" (default), "linearizable", "strong", "none", or "auto".
-	LinearizableTimeout string // e.g. "1s" if level=linearizable.
-	Freshness           string // e.g. "1s" if level=none.
-	FreshnessStrict     bool   // if true, adds &freshness_strict.
 }
 
 // ExecuteResponse represents the JSON returned by /db/execute.
@@ -332,15 +259,4 @@ func decodeJSONResponse(r io.Reader, dest interface{}) error {
 	// 2. Unmarshal into dest
 	// 3. Return any errors
 	return nil
-}
-
-// marshalStatementsToJSON is one place to handle the "SQL statements array" format
-// required by rqlite for both /db/query and /db/execute, rather than duplicating
-// that logic in multiple places.
-func marshalStatementsToJSON(statements []SQLStatement) ([]byte, error) {
-	// 1. Build an array of interface{} representing each statement
-	//    If a statement has PositionalParams or NamedParams, represent
-	//    it as [SQL, param1, param2] or [SQL, { "name": "foo", "value": 5 }] etc.
-	// 2. json.Marshal(...)
-	return nil, nil
 }
