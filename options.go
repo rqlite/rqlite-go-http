@@ -1,4 +1,4 @@
-package rqlitehttp
+package http
 
 import "time"
 
