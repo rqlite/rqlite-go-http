@@ -36,6 +36,19 @@ func (s SQLStatement) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.SQL)
 }
 
+// UnmarshalJSON implements a custom JSON representation so that SQL statements
+// always appear as an array in the format rqlite expects.
+func (s *SQLStatement) UnmarshalJSON(data []byte) error {
+	var sql string
+	if err := json.Unmarshal(data, &sql); err != nil {
+		return err
+	}
+	// No parameters => just return "SQL" as a JSON string.
+	// e.g. "CREATE TABLE foo (id INTEGER NOT NULL ...)"
+	s.SQL = sql
+	return nil
+}
+
 // SQLStatements is a slice of SQLStatement.
 type SQLStatements []SQLStatement
 
@@ -51,4 +64,13 @@ func NewSQLStatementsFromStrings(stmts []string) SQLStatements {
 // elements are each statement’s custom JSON form.
 func (sts SQLStatements) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]SQLStatement(sts))
+}
+
+func (sts SQLStatements) UnmarshalJSON(data []byte) error {
+	var stmts []SQLStatement
+	if err := json.Unmarshal(data, &stmts); err != nil {
+		return err
+	}
+	sts = SQLStatements(stmts)
+	return nil
 }

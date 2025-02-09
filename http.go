@@ -11,6 +11,59 @@ import (
 	"net/url"
 )
 
+// ExecuteResponse represents the JSON returned by /db/execute.
+type ExecuteResponse struct {
+	Results        []ExecuteResult `json:"results"`
+	Time           float64         `json:"time"`
+	SequenceNumber int64           `json:"sequence_number,omitempty"`
+}
+
+// ExecuteResult is an element of ExecuteResponse.Results.
+type ExecuteResult struct {
+	LastInsertID *int64  `json:"last_insert_id,omitempty"`
+	RowsAffected *int64  `json:"rows_affected,omitempty"`
+	Time         float64 `json:"time,omitempty"`
+	Error        string  `json:"error,omitempty"`
+}
+
+// QueryResponse represents the JSON returned by /db/query in the default (non-associative) form.
+type QueryResponse struct {
+	Results []QueryResult `json:"results"`
+	Time    float64       `json:"time"`
+}
+
+// QueryResult is an element of QueryResponse.Results.
+type QueryResult struct {
+	Columns []string `json:"columns,omitempty"`
+	Types   []string `json:"types,omitempty"`
+	Values  [][]any  `json:"values,omitempty"`
+	Time    float64  `json:"time,omitempty"`
+	Error   string   `json:"error,omitempty"`
+}
+
+// RequestResponse represents the JSON returned by /db/request.
+type RequestResponse struct {
+	Results []RequestResult `json:"results"`
+	Time    float64         `json:"time"`
+}
+
+// RequestResult is an element of RequestResponse.Results.
+// It may include either Query-like results or Execute-like results, or an error.
+type RequestResult struct {
+	// Same fields as QueryResult plus ExecuteResult fields.
+	// If read-only, LastInsertID and RowsAffected would be empty;
+	// if write-only, Columns and Values would be empty.
+	Columns      []string `json:"columns,omitempty"`
+	Types        []string `json:"types,omitempty"`
+	Values       [][]any  `json:"values,omitempty"`
+	LastInsertID *int64   `json:"last_insert_id,omitempty"`
+	RowsAffected *int64   `json:"rows_affected,omitempty"`
+	Error        string   `json:"error,omitempty"`
+	Time         float64  `json:"time,omitempty"`
+	// If associative form is requested, you could define a special type for that case,
+	// or include an alternative representation of rows here.
+}
+
 // Client is the main type through which rqlite is accessed.
 type Client struct {
 	httpClient *http.Client
@@ -210,62 +263,13 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// ExecuteResponse represents the JSON returned by /db/execute.
-type ExecuteResponse struct {
-	Results        []ExecuteResult `json:"results"`
-	Time           float64         `json:"time"`
-	SequenceNumber int64           `json:"sequence_number,omitempty"`
-}
-
-// ExecuteResult is an element of ExecuteResponse.Results.
-type ExecuteResult struct {
-	LastInsertID *int64  `json:"last_insert_id,omitempty"`
-	RowsAffected *int64  `json:"rows_affected,omitempty"`
-	Time         float64 `json:"time,omitempty"`
-	Error        string  `json:"error,omitempty"`
-}
-
-// QueryResponse represents the JSON returned by /db/query in the default (non-associative) form.
-type QueryResponse struct {
-	Results []QueryResult `json:"results"`
-	Time    float64       `json:"time"`
-}
-
-// QueryResult is an element of QueryResponse.Results.
-type QueryResult struct {
-	Columns []string `json:"columns,omitempty"`
-	Types   []string `json:"types,omitempty"`
-	Values  [][]any  `json:"values,omitempty"`
-	Time    float64  `json:"time,omitempty"`
-	Error   string   `json:"error,omitempty"`
-}
-
-// RequestResponse represents the JSON returned by /db/request.
-type RequestResponse struct {
-	Results []RequestResult `json:"results"`
-	Time    float64         `json:"time"`
-}
-
-// RequestResult is an element of RequestResponse.Results.
-// It may include either Query-like results or Execute-like results, or an error.
-type RequestResult struct {
-	// Same fields as QueryResult plus ExecuteResult fields.
-	// If read-only, LastInsertID and RowsAffected would be empty;
-	// if write-only, Columns and Values would be empty.
-	Columns      []string `json:"columns,omitempty"`
-	Types        []string `json:"types,omitempty"`
-	Values       [][]any  `json:"values,omitempty"`
-	LastInsertID *int64   `json:"last_insert_id,omitempty"`
-	RowsAffected *int64   `json:"rows_affected,omitempty"`
-	Error        string   `json:"error,omitempty"`
-	Time         float64  `json:"time,omitempty"`
-	// If associative form is requested, you could define a special type for that case,
-	// or include an alternative representation of rows here.
-}
-
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, url string, values url.Values, body io.Reader) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, method, url+"?"+values.Encode(), body)
+	fullURL := url
+	if values != nil {
+		fullURL += "?" + values.Encode()
+	}
+	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
 	if err != nil {
 		return nil, err
 	}

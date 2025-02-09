@@ -156,7 +156,11 @@ func MakeURLValues(input any) (url.Values, error) {
 				strVal = fieldValue.Interface().(string)
 			case reflect.Bool:
 				b := fieldValue.Interface().(bool)
-				strVal = strconv.FormatBool(b)
+				if !b {
+					// When it comes to Boolean values, if it's false, don't include it.
+					continue
+				}
+				strVal = "true"
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				i := fieldValue.Int()
 				strVal = strconv.FormatInt(i, 10)
