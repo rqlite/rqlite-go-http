@@ -23,6 +23,7 @@ type Client struct {
 	backupURL  string
 	loadURL    string
 	bootURL    string
+	statusURL  string
 
 	// Fields for optional Basic Auth
 	basicAuthUser string
@@ -40,6 +41,7 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		backupURL:  baseURL + "/db/backup",
 		loadURL:    baseURL + "/db/load",
 		bootURL:    baseURL + "/boot",
+		statusURL:  baseURL + "/status",
 	}
 	if cl.httpClient == nil {
 		cl.httpClient = DefaultClient()
@@ -55,7 +57,7 @@ func (c *Client) SetBasicAuth(username, password string) {
 }
 
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
-func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts ExecuteOptions) (*ExecuteResponse, error) {
+func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (*ExecuteResponse, error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -193,6 +195,16 @@ func (c *Client) Boot(ctx context.Context, r io.Reader, opts BootOptions) error 
 	//      curl -XPOST 'http://localhost:4001/boot' --upload-file mydb.sqlite
 	// 4. Check for HTTP status codes or JSON error messages.
 
+	return nil
+}
+
+// Status returns the status of the node.
+func (c *Client) Status(ctx context.Context) error {
+	resp, err := c.doRequest(ctx, "GET", c.statusURL, nil, nil)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
 	return nil
 }
 

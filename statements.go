@@ -39,6 +39,14 @@ func (s SQLStatement) MarshalJSON() ([]byte, error) {
 // SQLStatements is a slice of SQLStatement.
 type SQLStatements []SQLStatement
 
+func NewSQLStatementsFromStrings(stmts []string) SQLStatements {
+	s := make(SQLStatements, len(stmts))
+	for i, stmt := range stmts {
+		s[i] = SQLStatement{SQL: stmt}
+	}
+	return s
+}
+
 // MarshalJSON for SQLStatements produces a JSON array whose
 // elements are each statement’s custom JSON form.
 func (sts SQLStatements) MarshalJSON() ([]byte, error) {
