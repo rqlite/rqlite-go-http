@@ -4,25 +4,23 @@ import "time"
 
 // BackupOptions holds optional parameters for a backup operation.
 type BackupOptions struct {
-	// Fmt can be "sql" if a SQL text dump is desired, otherwise an empty string
+	// Format can be "sql" if a SQL text dump is desired, otherwise an empty string
 	// (or something else) means a binary SQLite file is returned.
-	Fmt string
+	Format string `uvalue:"fmt"`
 
 	// If set, request that the backup be vacuumed before returning it.
-	// e.g. /db/backup?vacuum
-	Vacuum bool
+	Vacuum bool `uvalue:"vacuum"`
 
 	// If set, request that the backup be GZIP-compressed.
 	// e.g. /db/backup?compress
-	Compress bool
+	Compress bool `uvalue:"compress"`
 
-	// If set, ask a Follower not to forward the request to the Leader.
-	// e.g. /db/backup?noleader
-	NoLeader bool
+	// If set, ask a Follower not to forward the request to the Leader and instead
+	// read its local database and return that as the backup.
+	NoLeader bool `uvalue:"noleader"`
 
 	// If set, instruct a Follower to return a redirect instead of forwarding.
-	// e.g. /db/backup?redirect
-	Redirect bool
+	Redirect bool `uvalue:"redirect"`
 }
 
 // LoadOptions configures how to load data into the node.

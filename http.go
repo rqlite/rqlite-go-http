@@ -150,27 +150,23 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts Req
 	return &reqResp, nil
 }
 
-// -------------------------------------------------------------
-// Backup
-// -------------------------------------------------------------
-
-// Backup requests a copy of the SQLite database (or a SQL text dump) from the node.
-// The returned data can be saved to disk or processed in memory.
-//
-// This method issues a GET request to /db/backup. If opts.Fmt == "sql", it requests
-// a SQL text dump instead of a binary SQLite file.
+// Backup requests a copy of the SQLite database from the node. The caller must close the
+// returned ReadCloser when done, regardless of any error.
 func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser, error) {
-	// 1. Build the URL from c.baseURL + "/db/backup".
-	// 2. Add query parameters as indicated by opts.
-	// 3. Create an HTTP GET request.
-	// 4. Return the response body (io.ReadCloser) if successful.
+	reqParams, err := MakeURLValues(opts)
+	if err != nil {
+		return nil, err
+	}
 
-	return nil, nil
+	resp, err := c.doRequest(ctx, "GET", c.backupURL, reqParams, nil)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+	return resp.Body, nil
 }
-
-// -------------------------------------------------------------
-// Restore (Load or Boot)
-// -------------------------------------------------------------
 
 // Load streams data from r into the node, to load or restore data. Depending on opts.Format,
 // the data can be a raw SQLite file (application/octet-stream) or a text dump (text/plain).
