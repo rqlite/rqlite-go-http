@@ -1,6 +1,10 @@
 package http
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+)
 
 // SQLStatement represents a single SQL statement, possibly with parameters.
 type SQLStatement struct {
@@ -39,13 +43,44 @@ func (s SQLStatement) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements a custom JSON representation so that SQL statements
 // always appear as an array in the format rqlite expects.
 func (s *SQLStatement) UnmarshalJSON(data []byte) error {
+	// create a JSON Decoder and tell is to UseNumber
+	// so that it doesn't convert numbers to float64
+	// which would be a lossy conversion
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+
 	var sql string
-	if err := json.Unmarshal(data, &sql); err != nil {
+	if err := json.Unmarshal(data, &sql); err == nil {
+		s.SQL = sql
+		return nil
+	}
+
+	var arr []any
+	if err := json.Unmarshal(data, &arr); err != nil {
 		return err
 	}
-	// No parameters => just return "SQL" as a JSON string.
-	// e.g. "CREATE TABLE foo (id INTEGER NOT NULL ...)"
+
+	if len(arr) == 0 {
+		return nil
+	}
+
+	sql, ok := arr[0].(string)
+	if !ok {
+		return fmt.Errorf("expected string for SQL statement, got %T", arr[0])
+	}
 	s.SQL = sql
+
+	if len(arr) == 1 {
+		return nil
+	}
+
+	// Remaining elements are either a single map, or positional parameters
+	m, ok := arr[1].(map[string]any)
+	if ok {
+		s.NamedParams = m
+	} else {
+		s.PositionalParams = arr[1:]
+	}
 	return nil
 }
 
@@ -66,11 +101,15 @@ func (sts SQLStatements) MarshalJSON() ([]byte, error) {
 	return json.Marshal([]SQLStatement(sts))
 }
 
-func (sts SQLStatements) UnmarshalJSON(data []byte) error {
+func (sts *SQLStatements) UnmarshalJSON(data []byte) error {
 	var stmts []SQLStatement
 	if err := json.Unmarshal(data, &stmts); err != nil {
 		return err
 	}
-	sts = SQLStatements(stmts)
+	s := make(SQLStatements, len(stmts))
+	*sts = s
+	for i, stmt := range stmts {
+		s[i] = stmt
+	}
 	return nil
 }

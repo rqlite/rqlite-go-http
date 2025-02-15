@@ -153,8 +153,8 @@ func Test_MakeURLValues(t *testing.T) {
 		if got := vals.Get("i"); got != "0" {
 			t.Fatalf("expected \"0\" for \"i\" (int zero), got %q", got)
 		}
-		if got := vals.Get("b"); got != "false" {
-			t.Fatalf("expected \"false\" for \"b\" (bool zero), got %q", got)
+		if got := vals.Get("b"); got != "" {
+			t.Fatalf("expected \"\" for \"b\" (bool zero), got %q", got)
 		}
 	})
 

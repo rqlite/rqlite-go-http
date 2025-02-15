@@ -3,7 +3,6 @@ package http
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -88,26 +87,33 @@ func Test_Execute(t *testing.T) {
 			opts:       nil,
 			respBody:   `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
 		},
-		// {
-		// 	name:         "single CREATE TABLE statement",
-		// 	statements:   NewSQLStatementsFromStrings([]string{"CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)"}),
-		// 	opts:         &ExecuteOptions{Transaction: true, Timeout: mustParseDuration("1s")},
-		// 	respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
-		// 	expURLValues: url.Values{"transaction": []string{"true"}, "timeout": []string{"1s"}},
-		// },
-		// {
-		// 	name:       "two CREATE TABLE statements",
-		// 	statements: NewSQLStatementsFromStrings([]string{"CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)", "CREATE TABLE bar (id INTEGER PRIMARY KEY, name TEXT)"}),
-		// 	opts:       nil,
-		// 	respBody:   `{"results": [{"last_insert_id": 123, "rows_affected": 456}, {"last_insert_id": 789, "rows_affected": 101112}]}`,
-		// },
-		// {
-		// 	name:         "single INSERT statement with positional arguments",
-		// 	statements:   SQLStatements{SQLStatement{SQL: "INSERT INTO foo VALUES(?, ?)", PositionalParams: []any{"name", 123}}},
-		// 	opts:         nil,
-		// 	respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
-		// 	expURLValues: nil,
-		// },
+		{
+			name:         "single CREATE TABLE statement",
+			statements:   NewSQLStatementsFromStrings([]string{"CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)"}),
+			opts:         &ExecuteOptions{Transaction: true, Timeout: mustParseDuration("1s")},
+			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
+			expURLValues: url.Values{"transaction": []string{"true"}, "timeout": []string{"1s"}},
+		},
+		{
+			name:       "two CREATE TABLE statements",
+			statements: NewSQLStatementsFromStrings([]string{"CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)", "CREATE TABLE bar (id INTEGER PRIMARY KEY, name TEXT)"}),
+			opts:       nil,
+			respBody:   `{"results": [{"last_insert_id": 123, "rows_affected": 456}, {"last_insert_id": 789, "rows_affected": 101112}]}`,
+		},
+		{
+			name:         "single INSERT statement with positional arguments",
+			statements:   SQLStatements{SQLStatement{SQL: "INSERT INTO foo VALUES(?, ?)", PositionalParams: []any{"name", float64(123)}}},
+			opts:         nil,
+			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
+			expURLValues: nil,
+		},
+		{
+			name:         "single INSERT statement with named arguments",
+			statements:   SQLStatements{SQLStatement{SQL: "INSERT INTO foo VALUES(:name, :age)", NamedParams: map[string]any{"name": "name", "age": float64(123)}}},
+			opts:         nil,
+			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
+			expURLValues: nil,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -122,14 +128,13 @@ func Test_Execute(t *testing.T) {
 					t.Fatalf("Unexpected error reading body: %v", err)
 				}
 				defer r.Body.Close()
-				fmt.Println(string(body))
 
 				var gotStmts SQLStatements
 				if err := json.Unmarshal(body, &gotStmts); err != nil {
 					t.Fatalf("Unexpected error unmarshalling body: %v", err)
 				}
 				if !reflect.DeepEqual(tt.statements, gotStmts) {
-					t.Fatalf("Expected %v, got %v", tt.statements, gotStmts)
+					t.Fatalf("Expected '%v' in request body, got '%v'", tt.statements, gotStmts)
 				}
 
 				if tt.expURLValues != nil {
