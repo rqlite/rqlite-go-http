@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -51,43 +52,43 @@ type BootOptions struct {
 // ExecuteOptions holds optional settings for /db/execute requests.
 type ExecuteOptions struct {
 	// Transaction indicates whether statements should be enclosed in a transaction.
-	Transaction bool `uvalue:"transaction"`
+	Transaction bool `uvalue:"transaction,omitempty"`
 
 	// Pretty requests pretty-printed JSON.
-	Pretty bool `uvalue:"pretty"`
+	Pretty bool `uvalue:"pretty,omitempty"`
 
 	// Timings requests timing information.
-	Timings bool `uvalue:"timings"`
+	Timings bool `uvalue:"timings,omitempty"`
 
 	// Queue requests that the statement be queued
-	Queue bool `uvalue:"queue"`
+	Queue bool `uvalue:"queue,omitempty"`
 
 	// Wait requests that the system only respond once the statement has been committed.
-	Wait bool `uvalue:"wait"`
+	Wait bool `uvalue:"wait,omitempty"`
 
 	// Timeout after which if Wait is set, the system should respond with an error if
 	// the request has not been persisted.
-	Timeout time.Duration `uvalue:"timeout"`
+	Timeout time.Duration `uvalue:"timeout,omitempty"`
 }
 
 // QueryOptions holds optional settings for /db/query requests.
 type QueryOptions struct {
 	// Timeout is applied at the database level.
-	Timeout time.Duration `uvalue:"timeout"`
+	Timeout time.Duration `uvalue:"timeout,omitempty"`
 
-	Pretty  bool `uvalue:"pretty"`
-	Timings bool `uvalue:"timings"`
+	Pretty  bool `uvalue:"pretty,omitempty"`
+	Timings bool `uvalue:"timings,omitempty"`
 
 	// Associative signals whether to request the "associative" form of results.
-	Associative bool `uvalue:"associative"`
+	Associative bool `uvalue:"associative,omitempty"`
 
 	// BlobAsArray signals whether to request the BLOB data as arrays of byte values.
-	BlobAsArray bool `uvalue:"blob_array"`
+	BlobAsArray bool `uvalue:"blob_array,omitempty"`
 
-	Level               string        `uvalue:"level"`
-	LinearizableTimeout time.Duration `uvalue:"linearizable_timeout"`
-	Freshness           time.Duration `uvalue:"freshness"`
-	FreshnessStrict     bool          `uvalue:"freshness_strict"`
+	Level               string        `uvalue:"level,omitempty"`
+	LinearizableTimeout time.Duration `uvalue:"linearizable_timeout,omitempty"`
+	Freshness           time.Duration `uvalue:"freshness,omitempty"`
+	FreshnessStrict     bool          `uvalue:"freshness_strict,omitempty"`
 }
 
 // RequestOptions holds optional settings for /db/request requests.
@@ -139,6 +140,13 @@ func MakeURLValues(input any) (url.Values, error) {
 			// No `uvalue` tag, skip.
 			continue
 		}
+		parts := strings.Split(tagVal, ",")
+		tagVal = parts[0]
+		omitEmpty := false
+		if len(parts) > 1 {
+			// If there are multiple parts, the second part is the option.
+			omitEmpty = parts[1] == "omitempty"
+		}
 
 		fieldValue := val.Field(i)
 		if !fieldValue.CanInterface() {
@@ -149,23 +157,34 @@ func MakeURLValues(input any) (url.Values, error) {
 		var strVal string
 		if fieldValue.Type() == reflect.TypeOf(time.Duration(0)) {
 			d := fieldValue.Interface().(time.Duration)
+			if d == 0 && omitEmpty {
+				continue
+			}
 			strVal = d.String()
 		} else {
 			switch fieldValue.Kind() {
 			case reflect.String:
 				strVal = fieldValue.Interface().(string)
-			case reflect.Bool:
-				b := fieldValue.Interface().(bool)
-				if !b {
-					// When it comes to Boolean values, if it's false, don't include it.
+				if omitEmpty && strVal == "" {
 					continue
 				}
-				strVal = "true"
+			case reflect.Bool:
+				b := fieldValue.Interface().(bool)
+				if omitEmpty && !b {
+					continue
+				}
+				strVal = strconv.FormatBool(b)
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 				i := fieldValue.Int()
+				if omitEmpty && i == 0 {
+					continue
+				}
 				strVal = strconv.FormatInt(i, 10)
 			case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
 				u := fieldValue.Uint()
+				if omitEmpty && u == 0 {
+					continue
+				}
 				strVal = strconv.FormatUint(u, 10)
 			default:
 				continue

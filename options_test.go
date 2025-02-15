@@ -146,15 +146,36 @@ func Test_MakeURLValues(t *testing.T) {
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
-		// Zero values
 		if got := vals.Get("s"); got != "" {
 			t.Fatalf("expected empty string for \"s\", got %q", got)
 		}
 		if got := vals.Get("i"); got != "0" {
 			t.Fatalf("expected \"0\" for \"i\" (int zero), got %q", got)
 		}
-		if got := vals.Get("b"); got != "" {
-			t.Fatalf("expected \"\" for \"b\" (bool zero), got %q", got)
+		if got := vals.Get("b"); got != "false" {
+			t.Fatalf(`expected "false"  for "b", got %q`, got)
+		}
+	})
+
+	t.Run("ZeroValues_OmitEmpy", func(t *testing.T) {
+		type ZVals struct {
+			S string `uvalue:"s,omitempty"`
+			I int    `uvalue:"i,omitempty"`
+			B bool   `uvalue:"b,omitempty"`
+		}
+		z := &ZVals{}
+		vals, err := MakeURLValues(z)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if vals.Has("s") {
+			t.Fatalf("expected no value for \"s\", got %q", vals.Get("s"))
+		}
+		if vals.Has("i") {
+			t.Fatalf("expected no value for \"i\" (int zero), got %q", vals.Get("i"))
+		}
+		if vals.Has("b") {
+			t.Fatalf(`expected no value for "b", got %q`, vals.Get("b"))
 		}
 	})
 

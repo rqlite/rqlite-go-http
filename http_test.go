@@ -88,7 +88,7 @@ func Test_Execute(t *testing.T) {
 			respBody:   `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
 		},
 		{
-			name:         "single CREATE TABLE statement",
+			name:         "single CREATE TABLE statement with options",
 			statements:   NewSQLStatementsFromStrings([]string{"CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)"}),
 			opts:         &ExecuteOptions{Transaction: true, Timeout: mustParseDuration("1s")},
 			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
@@ -165,6 +165,104 @@ func Test_Execute(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_Query(t *testing.T) {
+	tests := []struct {
+		name         string
+		statements   SQLStatements
+		opts         QueryOptions
+		expURLValues url.Values
+		respBody     string
+	}{
+		{
+			name:         "simple SELECT query",
+			statements:   NewSQLStatementsFromStrings([]string{"SELECT * FROM foo"}),
+			opts:         QueryOptions{},
+			expURLValues: nil,
+			respBody:     `{"results": [{"columns": ["id", "name"], "values": [[1, "Alice"], [2, "Bob"]]}], "time": 0.456}`,
+		},
+		{
+			name:       "SELECT query with options",
+			statements: NewSQLStatementsFromStrings([]string{"SELECT name FROM bar"}),
+			opts: QueryOptions{
+				Pretty:  true,
+				Timeout: mustParseDuration("2s"),
+			},
+			expURLValues: url.Values{
+				"pretty":  []string{"true"},
+				"timeout": []string{"2s"},
+			},
+			respBody: `{"results": [{"columns": ["name"], "values": [["Charlie"]]}], "time": 0.789}`,
+		},
+		{
+			name:         "multiple SELECT queries",
+			statements:   NewSQLStatementsFromStrings([]string{"SELECT 1", "SELECT 2"}),
+			opts:         QueryOptions{},
+			expURLValues: nil,
+			respBody:     `{"results": [{"columns": ["?column?"], "values": [[1]]}, {"columns": ["?column?"], "values": [[2]]}], "time": 1.234}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path != "/db/query" {
+					t.Fatalf("Unexpected path: %s", r.URL.Path)
+				}
+				if r.Method != http.MethodPost {
+					t.Fatalf("Expected POST, got %s", r.Method)
+				}
+				body, err := io.ReadAll(r.Body)
+				if err != nil {
+					t.Fatalf("Unexpected error reading body: %v", err)
+				}
+				defer r.Body.Close()
+
+				var gotStmts SQLStatements
+				if err := json.Unmarshal(body, &gotStmts); err != nil {
+					t.Fatalf("Unexpected error unmarshalling body: %v", err)
+				}
+				if !reflect.DeepEqual(tt.statements, gotStmts) {
+					t.Fatalf("Expected statements %+v, got %+v", tt.statements, gotStmts)
+				}
+
+				if tt.expURLValues != nil {
+					values, err := url.ParseQuery(r.URL.RawQuery)
+					if err != nil {
+						t.Fatalf("Unexpected error parsing query string: %s", r.URL.RawQuery)
+					}
+					if !reflect.DeepEqual(tt.expURLValues, values) {
+						t.Fatalf("Expected URL values %v, got %v", tt.expURLValues, values)
+					}
+				}
+
+				w.WriteHeader(http.StatusOK)
+				w.Write([]byte(tt.respBody))
+			}))
+			defer ts.Close()
+
+			client := NewClient(ts.URL, nil)
+			defer client.Close()
+			gotQR, err := client.Query(context.Background(), tt.statements, tt.opts)
+			if err != nil {
+				t.Fatalf("Expected nil error, got %v", err)
+			}
+			expQR := mustUnmarshalQueryResponse(tt.respBody)
+
+			if !reflect.DeepEqual(expQR, *gotQR) {
+				t.Fatalf("Expected %+v, got %+v", expQR, gotQR)
+			}
+		})
+	}
+}
+
+func mustUnmarshalQueryResponse(s string) QueryResponse {
+	var qr QueryResponse
+	if err := json.Unmarshal([]byte(s), &qr); err != nil {
+		panic(err)
+	}
+	return qr
 }
 
 func mustUnmarshalExecuteResponse(s string) ExecuteResponse {
