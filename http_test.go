@@ -332,7 +332,7 @@ func Test_Request(t *testing.T) {
 	defer server.Close()
 
 	cl := NewClient(server.URL, nil)
-	resp, err := cl.Request(context.Background(), statements, opts)
+	resp, err := cl.Request(context.Background(), statements, &opts)
 	if err != nil {
 		t.Fatalf("unexpected error from Request: %v", err)
 	}

@@ -190,9 +190,17 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	return &queryResponse, nil
 }
 
+// RequestSingle sends a single statement using /db/request.
+func (c *Client) RequestSingle(ctx context.Context, statement string) (*RequestResponse, error) {
+	statements := SQLStatements{
+		{SQL: statement},
+	}
+	return c.Request(ctx, statements, nil)
+}
+
 // Request sends both read and write statements in a single request using /db/request.
 // This method determines read vs. write by inspecting the statements.
-func (c *Client) Request(ctx context.Context, statements SQLStatements, opts RequestOptions) (*RequestResponse, error) {
+func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (*RequestResponse, error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
