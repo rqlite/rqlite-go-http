@@ -112,6 +112,14 @@ func (c *Client) SetBasicAuth(username, password string) {
 	c.basicAuthPass = password
 }
 
+// ExecuteSingle performs a single write operation (INSERT, UPDATE, DELETE) using /db/execute.
+func (c *Client) ExecuteSingle(ctx context.Context, statement string) (*ExecuteResponse, error) {
+	statements := SQLStatements{
+		{SQL: statement},
+	}
+	return c.Execute(ctx, statements, nil)
+}
+
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
 func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (*ExecuteResponse, error) {
 	body, err := statements.MarshalJSON()
@@ -145,8 +153,16 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 	return &executeResp, nil
 }
 
+// QuerySingle performs a single read operation (SELECT) using /db/query.
+func (c *Client) QuerySingle(ctx context.Context, statement string) (*QueryResponse, error) {
+	statements := SQLStatements{
+		{SQL: statement},
+	}
+	return c.Query(ctx, statements, nil)
+}
+
 // Query performs a read operation (SELECT) using /db/query.
-func (c *Client) Query(ctx context.Context, statements SQLStatements, opts QueryOptions) (*QueryResponse, error) {
+func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *QueryOptions) (*QueryResponse, error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err

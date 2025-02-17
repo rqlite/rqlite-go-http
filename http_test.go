@@ -248,7 +248,7 @@ func Test_Query(t *testing.T) {
 
 			client := NewClient(ts.URL, nil)
 			defer client.Close()
-			gotQR, err := client.Query(context.Background(), tt.statements, tt.opts)
+			gotQR, err := client.Query(context.Background(), tt.statements, &tt.opts)
 			if err != nil {
 				t.Fatalf("Expected nil error, got %v", err)
 			}
