@@ -60,8 +60,6 @@ type RequestResult struct {
 	RowsAffected *int64   `json:"rows_affected,omitempty"`
 	Error        string   `json:"error,omitempty"`
 	Time         float64  `json:"time,omitempty"`
-	// If associative form is requested, you could define a special type for that case,
-	// or include an alternative representation of rows here.
 }
 
 // Client is the main type through which rqlite is accessed.
