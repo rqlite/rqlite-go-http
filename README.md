@@ -5,7 +5,7 @@ A "thin" Go-based client for [rqlite](https://github.com/rqlite/rqlite) that com
 
 This library offers endpoints for:
 
-- Executing SQL statements (`INSERT`, `UPDATE`, `DELETE`, etc.)
+- Executing SQL statements (`INSERT`, `UPDATE`, `DELETE`.)
 - Running queries (reads)
 - Handling both read/write statements in a single request
 - Backing up and restoring data
