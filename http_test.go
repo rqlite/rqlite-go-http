@@ -261,6 +261,112 @@ func Test_Query(t *testing.T) {
 	}
 }
 
+func Test_Request(t *testing.T) {
+	statements := SQLStatements{
+		{
+			SQL:              "INSERT INTO foo(name) VALUES(?)",
+			PositionalParams: []interface{}{"alice"},
+		},
+		{
+			SQL:         "SELECT * FROM foo WHERE name=:name",
+			NamedParams: map[string]interface{}{"name": "bob"},
+		},
+	}
+
+	opts := RequestOptions{
+		Transaction: true,
+		Pretty:      true,
+	}
+
+	responseJSON := `{
+		"results": [
+			{
+				"last_insert_id": 1,
+				"rows_affected": 1,
+				"time": 0.001
+			},
+			{
+				"columns": ["id","name"],
+				"types": ["integer","text"],
+				"values": [[1,"alice"]],
+				"time": 0.002
+			}
+		],
+		"time": 0.003
+	}`
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/db/request" {
+			t.Errorf("expected path /db/request, got %s", r.URL.Path)
+		}
+
+		q := r.URL.Query()
+		if _, ok := q["transaction"]; !ok {
+			t.Error("expected ?transaction=... to be present, but not found")
+		}
+		if _, ok := q["pretty"]; !ok {
+			t.Error("expected ?pretty=... to be present, but not found")
+		}
+
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST method, got %s", r.Method)
+		}
+
+		bodyBytes, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed reading body: %v", err)
+		}
+
+		var gotStmts SQLStatements
+		if err := json.Unmarshal(bodyBytes, &gotStmts); err != nil {
+			t.Fatalf("failed to unmarshal posted JSON: %v", err)
+		}
+
+		if !reflect.DeepEqual(statements, gotStmts) {
+			t.Errorf("unexpected statements: expected: %v, got %v", statements, gotStmts)
+		}
+
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(responseJSON))
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	resp, err := cl.Request(context.Background(), statements, opts)
+	if err != nil {
+		t.Fatalf("unexpected error from Request: %v", err)
+	}
+
+	if len(resp.Results) != 2 {
+		t.Errorf("expected 2 results, got %d", len(resp.Results))
+	}
+	if resp.Time != 0.003 {
+		t.Errorf("expected Time=0.003, got %f", resp.Time)
+	}
+
+	first := resp.Results[0]
+	if first.LastInsertID == nil || *first.LastInsertID != 1 {
+		t.Errorf("expected last_insert_id=1, got %v", first.LastInsertID)
+	}
+	if first.RowsAffected == nil || *first.RowsAffected != 1 {
+		t.Errorf("expected rows_affected=1, got %v", first.RowsAffected)
+	}
+	if first.Time != 0.001 {
+		t.Errorf("expected time=0.001, got %f", first.Time)
+	}
+
+	second := resp.Results[1]
+	if len(second.Columns) != 2 || second.Columns[0] != "id" || second.Columns[1] != "name" {
+		t.Errorf("expected columns=[\"id\",\"name\"], got %v", second.Columns)
+	}
+	if len(second.Values) != 1 || len(second.Values[0]) != 2 {
+		t.Errorf("unexpected values: %v", second.Values)
+	}
+	if second.Time != 0.002 {
+		t.Errorf("expected time=0.002, got %f", second.Time)
+	}
+}
+
 func Test_Boot(t *testing.T) {
 	expectedData := []byte("some raw SQLite bytes")
 
