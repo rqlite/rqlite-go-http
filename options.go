@@ -9,32 +9,60 @@ import (
 	"time"
 )
 
+type ReadConsistencyLevel int
+
+const (
+	ReadConsistencyLevelUnknown = iota
+	ReadConsistencyLevelNone
+	ReadConsistencyLevelWeak
+	ReadConsistencyLevelStrong
+	ReadConsistencyLevelLinearizable
+	ReadConsistencyLevelAuto
+)
+
+func (rcl ReadConsistencyLevel) String() string {
+	switch rcl {
+	case ReadConsistencyLevelNone:
+		return "none"
+	case ReadConsistencyLevelWeak:
+		return "weak"
+	case ReadConsistencyLevelStrong:
+		return "strong"
+	case ReadConsistencyLevelLinearizable:
+		return "linearizable"
+	case ReadConsistencyLevelAuto:
+		return "auto"
+	default:
+		return "unknown"
+	}
+}
+
 // BackupOptions holds optional parameters for a backup operation.
 type BackupOptions struct {
 	// Format can be "sql" if a SQL text dump is desired, otherwise an empty string
 	// (or something else) means a binary SQLite file is returned.
-	Format string `uvalue:"fmt"`
+	Format string `uvalue:"fmt,omitempty"`
 
 	// If set, request that the backup be vacuumed before returning it.
-	Vacuum bool `uvalue:"vacuum"`
+	Vacuum bool `uvalue:"vacuum,omitempty"`
 
 	// If set, request that the backup be GZIP-compressed.
 	// e.g. /db/backup?compress
-	Compress bool `uvalue:"compress"`
+	Compress bool `uvalue:"compress,omitempty"`
 
 	// If set, ask a Follower not to forward the request to the Leader and instead
 	// read its local database and return that as the backup.
-	NoLeader bool `uvalue:"noleader"`
+	NoLeader bool `uvalue:"noleader,omitempty"`
 
 	// If set, instruct a Follower to return a redirect instead of forwarding.
-	Redirect bool `uvalue:"redirect"`
+	Redirect bool `uvalue:"redirect,omitempty"`
 }
 
 // LoadOptions configures how to load data into the node.
 type LoadOptions struct {
 	// If set, instruct a Follower to return a redirect instead of forwarding.
 	// e.g. /db/load?redirect
-	Redirect bool
+	Redirect bool `uvalue:"redirect,omitempty"`
 }
 
 // ExecuteOptions holds optional settings for /db/execute requests.
@@ -73,28 +101,28 @@ type QueryOptions struct {
 	// BlobAsArray signals whether to request the BLOB data as arrays of byte values.
 	BlobAsArray bool `uvalue:"blob_array,omitempty"`
 
-	Level               string        `uvalue:"level,omitempty"`
-	LinearizableTimeout time.Duration `uvalue:"linearizable_timeout,omitempty"`
-	Freshness           time.Duration `uvalue:"freshness,omitempty"`
-	FreshnessStrict     bool          `uvalue:"freshness_strict,omitempty"`
+	Level               ReadConsistencyLevel `uvalue:"level,omitempty"`
+	LinearizableTimeout time.Duration        `uvalue:"linearizable_timeout,omitempty"`
+	Freshness           time.Duration        `uvalue:"freshness,omitempty"`
+	FreshnessStrict     bool                 `uvalue:"freshness_strict,omitempty"`
 }
 
 // RequestOptions holds optional settings for /db/request requests.
 type RequestOptions struct {
 	// Transaction indicates whether statements should be enclosed in a transaction.
-	Transaction bool
+	Transaction bool `uvalue:"transaction,omitempty"`
 
 	// Timeout is applied at the database level.
-	Timeout     time.Duration
-	Pretty      bool
-	Timings     bool
-	Associative bool
-	BlobAsArray bool
+	Timeout     time.Duration `uvalue:"timeout,omitempty"`
+	Pretty      bool          `uvalue:"pretty,omitempty"`
+	Timings     bool          `uvalue:"timings,omitempty"`
+	Associative bool          `uvalue:"associative,omitempty"`
+	BlobAsArray bool          `uvalue:"blob_array,omitempty"`
 
-	Level               string // "weak" (default), "linearizable", "strong", "none", or "auto".
-	LinearizableTimeout string // e.g. "1s" if level=linearizable.
-	Freshness           string // e.g. "1s" if level=none.
-	FreshnessStrict     bool   // if true, adds &freshness_strict.
+	Level               ReadConsistencyLevel `uvalue:"level,omitempty"`
+	LinearizableTimeout string               `uvalue:"linearizable_timeout,omitempty"`
+	Freshness           string               `uvalue:"freshness,omitempty"`
+	FreshnessStrict     bool                 `uvalue:"freshness_strict,omitempty"`
 }
 
 // NodeOptions holds optional settings for /nodes requests.
@@ -102,6 +130,7 @@ type NodeOptions struct {
 	Timeout   time.Duration `uvalue:"timeout,omitempty"`
 	Pretty    bool          `uvalue:"pretty,omitempty"`
 	NonVoters bool          `uvalue:"non_voters,omitempty"`
+	Version   string        `uvalue:"ver,omitempty"`
 }
 
 // MakeURLValues converts a struct to a url.Values, using the `uvalue` tag to
@@ -156,6 +185,12 @@ func MakeURLValues(input any) (url.Values, error) {
 				continue
 			}
 			strVal = d.String()
+		} else if fieldValue.Type() == reflect.TypeOf(ReadConsistencyLevel(0)) {
+			rcl := fieldValue.Interface().(ReadConsistencyLevel)
+			if rcl == ReadConsistencyLevelUnknown {
+				continue
+			}
+			strVal = rcl.String()
 		} else {
 			switch fieldValue.Kind() {
 			case reflect.String:
