@@ -20,8 +20,8 @@ type ExecuteResponse struct {
 
 // ExecuteResult is an element of ExecuteResponse.Results.
 type ExecuteResult struct {
-	LastInsertID *int64  `json:"last_insert_id,omitempty"`
-	RowsAffected *int64  `json:"rows_affected,omitempty"`
+	LastInsertID int64   `json:"last_insert_id,omitempty"`
+	RowsAffected int64   `json:"rows_affected,omitempty"`
 	Time         float64 `json:"time,omitempty"`
 	Error        string  `json:"error,omitempty"`
 }
