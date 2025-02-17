@@ -10,7 +10,9 @@ import (
 
 // DefaultClient returns an HTTP client with a 5-second timeout.
 func DefaultClient() *http.Client {
-	return &http.Client{Timeout: 5 * time.Second}
+	return &http.Client{
+		Timeout: 5 * time.Second,
+	}
 }
 
 // NewTLSClientInsecure returns an HTTP client configured for simple TLS, but

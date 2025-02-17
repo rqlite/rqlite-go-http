@@ -75,6 +75,9 @@ type Client struct {
 	loadURL    string
 	bootURL    string
 	statusURL  string
+	expvarURL  string
+	nodesURL   string
+	readyURL   string
 
 	basicAuthUser string
 	basicAuthPass string
@@ -92,6 +95,9 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		loadURL:    baseURL + "/db/load",
 		bootURL:    baseURL + "/boot",
 		statusURL:  baseURL + "/status",
+		expvarURL:  baseURL + "/debug/vars",
+		nodesURL:   baseURL + "/nodes",
+		readyURL:   baseURL + "/readyz",
 	}
 	if cl.httpClient == nil {
 		cl.httpClient = DefaultClient()
@@ -220,48 +226,86 @@ func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser,
 	return resp.Body, nil
 }
 
-// Load streams data from r into the node, to load or restore data. Depending on opts.Format,
-// the data can be a raw SQLite file (application/octet-stream) or a text dump (text/plain).
-//
-// This corresponds to a POST request to /db/load.
+// Load streams data from r into the node, to load or restore data. Load automatically
+// detects the format of the data, and can handle both plain text and SQLite binary data.
 func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error {
-	// 1. Build the URL from c.baseURL + "/db/load".
-	// 2. Add any query parameters (e.g. redirect if desired).
-	// 3. Issue a POST with the appropriate Content-Type:
-	//    - application/octet-stream for a raw SQLite file
-	//    - text/plain for a SQL dump
-	// 4. Upload the data from r.
-	// 5. Handle HTTP status codes and parse any JSON error response if needed.
-
 	params, err := MakeURLValues(opts)
 	if err != nil {
 		return err
 	}
 	_ = params
 
-	return nil
+	first13 := make([]byte, 13)
+	_, err = r.Read(first13)
+	if err != nil {
+		return err
+	}
+
+	if validSQLiteData(first13) {
+		_, err = c.doOctetStreamPostRequest(ctx, c.loadURL, params, io.MultiReader(bytes.NewReader(first13), r))
+	} else {
+		_, err = c.doPlainPostRequest(ctx, c.loadURL, params, io.MultiReader(bytes.NewReader(first13), r))
+	}
+	return err
 }
 
 // Boot streams a raw SQLite file into a single-node system, effectively initializing
 // the underlying SQLite store from scratch. This is done via a POST to /boot.
-func (c *Client) Boot(ctx context.Context, r io.Reader, opts BootOptions) error {
-	// 1. Build the URL from c.baseURL + "/boot".
-	// 2. Issue a POST with Transfer-Encoding: chunked or a known Content-Length.
-	// 3. The data must be a binary SQLite file. The official doc shows usage:
-	//      curl -XPOST 'http://localhost:4001/boot' --upload-file mydb.sqlite
-	// 4. Check for HTTP status codes or JSON error messages.
-
-	return nil
+func (c *Client) Boot(ctx context.Context, r io.Reader) error {
+	_, err := c.doOctetStreamPostRequest(ctx, c.bootURL, nil, r)
+	return err
 }
 
 // Status returns the status of the node.
-func (c *Client) Status(ctx context.Context) error {
+func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 	resp, err := c.doGetRequest(ctx, c.statusURL, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer resp.Body.Close()
-	return nil
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// Expvar returns the expvar data from the node.
+func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
+	resp, err := c.doGetRequest(ctx, c.expvarURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// Nodes returns the list of known nodes in the cluster.
+func (c *Client) Nodes(ctx context.Context) (json.RawMessage, error) {
+	resp, err := c.doGetRequest(ctx, c.nodesURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return json.RawMessage(b), nil
+}
+
+// Ready returns the readiness of the node. The caller must close the returned ReadCloser
+// when done, regardless of any error.
+func (c *Client) Ready(ctx context.Context) (io.ReadCloser, error) {
+	resp, err := c.doGetRequest(ctx, c.readyURL, nil)
+	if err != nil {
+		return nil, err
+	}
+	return resp.Body, nil
 }
 
 // Close can clean up any long-lived resources owned by the Client, if needed.
@@ -275,6 +319,14 @@ func (c *Client) doGetRequest(ctx context.Context, url string, values url.Values
 
 func (c *Client) doJSONPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
 	return c.doRequest(ctx, "POST", url, "application/json", values, body)
+}
+
+func (c *Client) doOctetStreamPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
+	return c.doRequest(ctx, "POST", url, "application/octet-stream", values, body)
+}
+
+func (c *Client) doPlainPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
+	return c.doRequest(ctx, "POST", url, "text/plain", values, body)
 }
 
 // doRequest builds and executes an HTTP request, returning the response.
@@ -302,4 +354,8 @@ func (c *Client) doRequest(ctx context.Context, method, url string, contentTpe s
 		return nil, err
 	}
 	return resp, nil
+}
+
+func validSQLiteData(b []byte) bool {
+	return len(b) > 13 && string(b[0:13]) == "SQLite format"
 }

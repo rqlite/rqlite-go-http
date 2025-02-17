@@ -49,22 +49,25 @@ func Test_BasicAuth(t *testing.T) {
 		if exp, got := password, pass; exp != got {
 			t.Fatalf("Expected pass to be '%s', got %s", exp, got)
 		}
+
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("{}"))
 	}))
 
 	client := NewClient(ts.URL, nil)
-	if err := client.Status(context.Background()); err != nil {
+	if _, err := client.Status(context.Background()); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 
 	client.SetBasicAuth(username, password)
 	authExp = true
-	if err := client.Status(context.Background()); err != nil {
+	if _, err := client.Status(context.Background()); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 
 	client.SetBasicAuth("", "")
 	authExp = false
-	if err := client.Status(context.Background()); err != nil {
+	if _, err := client.Status(context.Background()); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 

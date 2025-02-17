@@ -32,21 +32,9 @@ type BackupOptions struct {
 
 // LoadOptions configures how to load data into the node.
 type LoadOptions struct {
-	// Format can be "binary" or "sql" etc.
-	// - "binary" -> application/octet-stream
-	// - "sql"    -> text/plain
-	Format string
-
 	// If set, instruct a Follower to return a redirect instead of forwarding.
 	// e.g. /db/load?redirect
 	Redirect bool
-}
-
-// BootOptions configures how to boot a single-node system.
-type BootOptions struct {
-	// Potential expansions (for instance, forcing a redirect or not).
-	// Usually /boot is only relevant for a single-node system, so
-	// there's not too much to configure.
 }
 
 // ExecuteOptions holds optional settings for /db/execute requests.
@@ -97,7 +85,7 @@ type RequestOptions struct {
 	Transaction bool
 
 	// Timeout is applied at the database level.
-	Timeout     string
+	Timeout     time.Duration
 	Pretty      bool
 	Timings     bool
 	Associative bool
@@ -107,6 +95,13 @@ type RequestOptions struct {
 	LinearizableTimeout string // e.g. "1s" if level=linearizable.
 	Freshness           string // e.g. "1s" if level=none.
 	FreshnessStrict     bool   // if true, adds &freshness_strict.
+}
+
+// NodeOptions holds optional settings for /nodes requests.
+type NodeOptions struct {
+	Timeout   time.Duration `uvalue:"timeout,omitempty"`
+	Pretty    bool          `uvalue:"pretty,omitempty"`
+	NonVoters bool          `uvalue:"non_voters,omitempty"`
 }
 
 // MakeURLValues converts a struct to a url.Values, using the `uvalue` tag to
