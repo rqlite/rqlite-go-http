@@ -117,7 +117,7 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 		return nil, err
 	}
 
-	resp, err := c.doRequest(ctx, "POST", c.executeURL, queryParams, bytes.NewReader(body))
+	resp, err := c.doJSONPostRequest(ctx, c.executeURL, queryParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +150,7 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts Query
 		return nil, err
 	}
 
-	resp, err := c.doRequest(ctx, "POST", c.queryURL, queryParams, bytes.NewReader(body))
+	resp, err := c.doJSONPostRequest(ctx, c.queryURL, queryParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts Req
 		return nil, err
 	}
 
-	resp, err := c.doRequest(ctx, "POST", c.requestURL, reqParams, bytes.NewReader(body))
+	resp, err := c.doJSONPostRequest(ctx, c.requestURL, reqParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser,
 		return nil, err
 	}
 
-	resp, err := c.doRequest(ctx, "GET", c.backupURL, reqParams, nil)
+	resp, err := c.doGetRequest(ctx, c.backupURL, reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -233,6 +233,12 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error 
 	// 4. Upload the data from r.
 	// 5. Handle HTTP status codes and parse any JSON error response if needed.
 
+	params, err := MakeURLValues(opts)
+	if err != nil {
+		return err
+	}
+	_ = params
+
 	return nil
 }
 
@@ -250,7 +256,7 @@ func (c *Client) Boot(ctx context.Context, r io.Reader, opts BootOptions) error 
 
 // Status returns the status of the node.
 func (c *Client) Status(ctx context.Context) error {
-	resp, err := c.doRequest(ctx, "GET", c.statusURL, nil, nil)
+	resp, err := c.doGetRequest(ctx, c.statusURL, nil)
 	if err != nil {
 		return err
 	}
@@ -263,8 +269,16 @@ func (c *Client) Close() error {
 	return nil
 }
 
+func (c *Client) doGetRequest(ctx context.Context, url string, values url.Values) (*http.Response, error) {
+	return c.doRequest(ctx, "GET", url, "", values, nil)
+}
+
+func (c *Client) doJSONPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
+	return c.doRequest(ctx, "POST", url, "application/json", values, body)
+}
+
 // doRequest builds and executes an HTTP request, returning the response.
-func (c *Client) doRequest(ctx context.Context, method, url string, values url.Values, body io.Reader) (*http.Response, error) {
+func (c *Client) doRequest(ctx context.Context, method, url string, contentTpe string, values url.Values, body io.Reader) (*http.Response, error) {
 	fullURL := url
 	if values != nil {
 		fullURL += "?" + values.Encode()
@@ -273,7 +287,9 @@ func (c *Client) doRequest(ctx context.Context, method, url string, values url.V
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Content-Type", "application/json")
+	if contentTpe != "" {
+		req.Header.Set("Content-Type", contentTpe)
+	}
 
 	// If Basic Auth is configured, add an Authorization header
 	if c.basicAuthUser != "" || c.basicAuthPass != "" {
