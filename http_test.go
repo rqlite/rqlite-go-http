@@ -1,6 +1,7 @@
 package http
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
@@ -257,6 +258,144 @@ func Test_Query(t *testing.T) {
 				t.Fatalf("Expected %+v, got %+v", expQR, gotQR)
 			}
 		})
+	}
+}
+
+func Test_Boot(t *testing.T) {
+	expectedData := []byte("some raw SQLite bytes")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("expected POST method, got %s", r.Method)
+		}
+		if r.URL.Path != "/boot" {
+			t.Errorf("expected path /boot, got %s", r.URL.Path)
+		}
+
+		postedData, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed reading request body: %v", err)
+		}
+
+		if !bytes.Equal(postedData, expectedData) {
+			t.Errorf("posted data does not match.\nwant: %q\ngot:  %q", expectedData, postedData)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	dataReader := bytes.NewReader(expectedData)
+	err := cl.Boot(context.Background(), dataReader)
+	if err != nil {
+		t.Fatalf("unexpected error calling Boot: %v", err)
+	}
+}
+
+func Test_Backup(t *testing.T) {
+	expectedData := []byte("some random bytes")
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/db/backup" {
+			t.Errorf("expected path /db/backup, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(expectedData); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	rc, err := cl.Backup(context.Background(), BackupOptions{})
+	if err != nil {
+		t.Fatalf("unexpected error calling Backup: %v", err)
+	}
+	defer rc.Close()
+
+	actualData, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatalf("unexpected error reading backup data: %v", err)
+	}
+
+	if string(actualData) != string(expectedData) {
+		t.Errorf("mismatched backup data.\nwant: %q\ngot:  %q", expectedData, actualData)
+	}
+}
+
+func Test_Status(t *testing.T) {
+	expectedData := []byte(`{"foo":"bar"}`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/status" {
+			t.Errorf("expected path /status, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(expectedData); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	rawMsg, err := cl.Status(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error calling Status: %v", err)
+	}
+
+	if string(rawMsg) != string(expectedData) {
+		t.Errorf("mismatched Status data.\nwant: %q\ngot:  %q", expectedData, rawMsg)
+	}
+}
+
+func Test_Expvar(t *testing.T) {
+	expectedData := []byte(`{"expvar_key":"expvar_value"}`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/debug/vars" {
+			t.Errorf("expected path /expvar, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(expectedData); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	rawMsg, err := cl.Expvar(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error calling Expvar: %v", err)
+	}
+
+	if string(rawMsg) != string(expectedData) {
+		t.Errorf("mismatched Expvar data.\nwant: %q\ngot:  %q", expectedData, rawMsg)
+	}
+}
+
+func Test_Nodes(t *testing.T) {
+	expectedData := []byte(`[{"api_addr":"localhost:4001","reachable":true}]`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/nodes" {
+			t.Errorf("expected path /nodes, got %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+		if _, err := w.Write(expectedData); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	rawMsg, err := cl.Nodes(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error calling Nodes: %v", err)
+	}
+
+	if string(rawMsg) != string(expectedData) {
+		t.Errorf("mismatched Nodes data.\nwant: %q\ngot:  %q", expectedData, rawMsg)
 	}
 }
 
