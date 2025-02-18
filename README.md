@@ -49,7 +49,7 @@ func main() {
 		rqlitehttp.SQLStatements{
 			{
 				SQL:              "INSERT INTO foo(name) VALUES(?)",
-				PositionalParams: []interface{}{"fiona"},
+				PositionalParams: []any{"fiona"},
 			},
 		},
 		nil, // optional ExecuteOptions
