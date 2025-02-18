@@ -1,6 +1,6 @@
 # rqlite-go-http
-[![Go Reference](https://pkg.go.dev/badge/github.com/rqlite/rqlite-go-http.svg)](https://pkg.go.dev/github.com/rqlite/rqlite-go-http)
 [![Circle CI](https://circleci.com/gh/rqlite/rqlite-go-http/tree/master.svg?style=svg)](https://circleci.com/gh/rqlite/rqlite-go-http/tree/master)
+[![Go Reference](https://pkg.go.dev/badge/github.com/rqlite/rqlite-go-http.svg)](https://pkg.go.dev/github.com/rqlite/rqlite-go-http)
 
 A "thin" Go-based client for [rqlite](https://github.com/rqlite/rqlite) that communicates with its HTTP interface. This client is useful on its own or as a foundation for higher-level libraries.
 
