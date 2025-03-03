@@ -53,7 +53,6 @@ func main() {
 				PositionalParams: []any{"fiona"},
 			},
 		},
-		nil, // optional ExecuteOptions
 	)
 	if err != nil {
 		panic(err)
