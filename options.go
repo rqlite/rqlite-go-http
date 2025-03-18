@@ -80,6 +80,8 @@ type ExecuteOptions struct {
 	Queue bool `uvalue:"queue,omitempty"`
 
 	// Wait requests that the system only respond once the statement has been committed.
+	// This is ignored unless Queue is true. If Queue is not true, an Execute request
+	// always waits until the request has been committed.
 	Wait bool `uvalue:"wait,omitempty"`
 
 	// Timeout after which if Wait is set, the system should respond with an error if
