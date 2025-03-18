@@ -6,9 +6,11 @@ import (
 	"time"
 )
 
+// Test_MakeURLValues tests makeURLValues(). While not exported this
+// functionality is key to this client library, so is unit-tested.
 func Test_MakeURLValues(t *testing.T) {
 	t.Run("NilInput", func(t *testing.T) {
-		vals, err := MakeURLValues(nil)
+		vals, err := makeURLValues(nil)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -21,7 +23,7 @@ func Test_MakeURLValues(t *testing.T) {
 		var foo *struct {
 			X string `uvalue:"xxx"`
 		}
-		vals, err := MakeURLValues(foo)
+		vals, err := makeURLValues(foo)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -32,7 +34,7 @@ func Test_MakeURLValues(t *testing.T) {
 
 	t.Run("PointerToNonStruct", func(t *testing.T) {
 		num := 42
-		_, err := MakeURLValues(&num)
+		_, err := makeURLValues(&num)
 		if err == nil {
 			t.Error("expected an error when passing pointer to non-struct")
 		}
@@ -44,7 +46,7 @@ func Test_MakeURLValues(t *testing.T) {
 			B int
 		}
 		nt := &NoTags{"hello", 123}
-		vals, err := MakeURLValues(nt)
+		vals, err := makeURLValues(nt)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -64,7 +66,7 @@ func Test_MakeURLValues(t *testing.T) {
 			B: 42,
 			C: true,
 		}
-		vals, err := MakeURLValues(st)
+		vals, err := makeURLValues(st)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -102,7 +104,7 @@ func Test_MakeURLValues(t *testing.T) {
 			Dur:   5 * time.Second,
 			NoTag: "secret",
 		}
-		vals, err := MakeURLValues(at)
+		vals, err := makeURLValues(at)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -142,7 +144,7 @@ func Test_MakeURLValues(t *testing.T) {
 			B bool   `uvalue:"b"`
 		}
 		z := &ZVals{}
-		vals, err := MakeURLValues(z)
+		vals, err := makeURLValues(z)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -164,7 +166,7 @@ func Test_MakeURLValues(t *testing.T) {
 			B bool   `uvalue:"b,omitempty"`
 		}
 		z := &ZVals{}
-		vals, err := MakeURLValues(z)
+		vals, err := makeURLValues(z)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -184,7 +186,7 @@ func Test_MakeURLValues(t *testing.T) {
 			X float64 `uvalue:"x"`
 		}
 		b := &BadType{X: 3.14}
-		vals, err := MakeURLValues(b)
+		vals, err := makeURLValues(b)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -198,12 +200,12 @@ func Test_MakeURLValues(t *testing.T) {
 func Test_MakeURLValuesSignature(t *testing.T) {
 	fn := reflect.ValueOf(MakeURLValues)
 	if fn.Kind() != reflect.Func {
-		t.Fatalf("MakeURLValues is not a function")
+		t.Fatalf("makeURLValues is not a function")
 	}
 	if fn.Type().NumIn() != 1 {
-		t.Fatalf("MakeURLValues should have 1 input parameter, got %d", fn.Type().NumIn())
+		t.Fatalf("makeURLValues should have 1 input parameter, got %d", fn.Type().NumIn())
 	}
 	if fn.Type().NumOut() != 2 {
-		t.Fatalf("MakeURLValues should have 2 output parameters, got %d", fn.Type().NumOut())
+		t.Fatalf("makeURLValues should have 2 output parameters, got %d", fn.Type().NumOut())
 	}
 }
