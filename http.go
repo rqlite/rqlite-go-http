@@ -144,6 +144,8 @@ func (c *Client) SetBasicAuth(username, password string) {
 }
 
 // ExecuteSingle performs a single write operation (INSERT, UPDATE, DELETE) using /db/execute.
+// args should be a single map of named parameters, or a slice of positional parameters.
+// It is the caller's responsibility to ensure the correct number and type of parameters.
 func (c *Client) ExecuteSingle(ctx context.Context, statement string, args ...any) (*ExecuteResponse, error) {
 	stmt, err := NewSQLStatementFrom(statement, args...)
 	if err != nil {
@@ -186,6 +188,8 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 }
 
 // QuerySingle performs a single read operation (SELECT) using /db/query.
+// args should be a single map of named parameters, or a slice of positional parameters.
+// It is the caller's responsibility to ensure the correct number and type of parameters.
 func (c *Client) QuerySingle(ctx context.Context, statement string, args ...any) (*QueryResponse, error) {
 	stmt, err := NewSQLStatementFrom(statement, args...)
 	if err != nil {
