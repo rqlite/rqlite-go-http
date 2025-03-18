@@ -4,13 +4,13 @@
 
 A "thin" Go-based client for [rqlite](https://rqlite.io) that communicates with its [HTTP API](https://rqlite.io/docs/api/). This client is useful on its own or as a foundation for higher-level libraries.
 
-This library offers endpoints for:
+This library offers support for:
 
 - Executing SQL statements (`INSERT`, `UPDATE`, `DELETE`)
 - Running queries (`SELECT`)
-- Handling both read/write statements in a single request
-- Backing up and restoring data
-- Booting a node from a raw SQLite file
+- Handling both read and write statements in a single request via the _Unified Endpoint_.
+- Backing up and restoring data to your rqlite system
+- Booting a rqlite node from a SQLite database file
 - Checking node status, diagnostic info, cluster membership, and readiness
 - Ability to customize HTTP communications for control over TLS, mutual TLS, timeouts, etc.
 
