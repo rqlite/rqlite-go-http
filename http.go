@@ -40,19 +40,61 @@ type ExecuteResult struct {
 
 // QueryResponse represents the JSON returned by /db/query in the default (non-associative) form.
 type QueryResponse struct {
-	Results []QueryResult `json:"results"`
-	Time    float64       `json:"time,omitempty"`
+	Results any     `json:"results"`
+	Time    float64 `json:"time,omitempty"`
 }
 
 // HasError returns true if any of the results in the response contain an error.
 // If an error is found, the index of the result and the error message are returned.
 func (qr *QueryResponse) HasError() (bool, int, string) {
-	for i, result := range qr.Results {
-		if result.Error != "" {
-			return true, i, result.Error
+	switch v := qr.Results.(type) {
+	case []QueryResult:
+		for i, result := range v {
+			if result.Error != "" {
+				return true, i, result.Error
+			}
+		}
+	case []QueryResultAssoc:
+		for i, result := range v {
+			if result.Error != "" {
+				return true, i, result.Error
+			}
 		}
 	}
 	return false, -1, ""
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for QueryResponse.
+func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
+	// Define an alias to avoid recursion.
+	type Alias QueryResponse
+	aux := &struct {
+		Results json.RawMessage `json:"results"`
+		*Alias
+	}{
+		Alias: (*Alias)(qr),
+	}
+
+	// Unmarshal into the auxiliary struct.
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	// Attempt to unmarshal Results into []QueryResult.
+	var res []QueryResult
+	if err := json.Unmarshal(aux.Results, &res); err == nil {
+		qr.Results = res
+		return nil
+	}
+
+	// Attempt to unmarshal Results into []QueryResultAssoc.
+	var resAssoc []QueryResultAssoc
+	if err := json.Unmarshal(aux.Results, &resAssoc); err == nil {
+		qr.Results = resAssoc
+		return nil
+	}
+
+	return fmt.Errorf("unable to unmarshal results into either []QueryResult or []QueryResultAssoc")
 }
 
 // QueryResult is an element of QueryResponse.Results.
@@ -62,6 +104,13 @@ type QueryResult struct {
 	Values  [][]any  `json:"values"`
 	Time    float64  `json:"time,omitempty"`
 	Error   string   `json:"error,omitempty"`
+}
+
+type QueryResultAssoc struct {
+	Types map[string]string `json:"types"`
+	Rows  []map[string]any  `json:"rows"`
+	Time  float64           `json:"time,omitempty"`
+	Error string            `json:"error,omitempty"`
 }
 
 // RequestResponse represents the JSON returned by /db/request.
