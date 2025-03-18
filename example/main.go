@@ -39,7 +39,7 @@ func main() {
 		rqlitehttp.SQLStatements{
 			{
 				SQL:              "INSERT INTO foo(name) VALUES(?)",
-				PositionalParams: []interface{}{"declan"},
+				PositionalParams: []any{"declan"},
 			},
 		},
 		&rqlitehttp.ExecuteOptions{
@@ -65,7 +65,7 @@ func main() {
 	fmt.Printf("QueryResponse: %s\n", jsonMarshal(qResp))
 }
 
-func jsonMarshal(v interface{}) string {
+func jsonMarshal(v any) string {
 	b, err := json.Marshal(v)
 	if err != nil {
 		panic(err)
