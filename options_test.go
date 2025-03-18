@@ -198,7 +198,7 @@ func Test_MakeURLValues(t *testing.T) {
 
 // Test that the function signature matches our expectations
 func Test_MakeURLValuesSignature(t *testing.T) {
-	fn := reflect.ValueOf(MakeURLValues)
+	fn := reflect.ValueOf(makeURLValues)
 	if fn.Kind() != reflect.Func {
 		t.Fatalf("makeURLValues is not a function")
 	}
