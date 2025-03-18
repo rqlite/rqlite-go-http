@@ -12,6 +12,7 @@ This library offers endpoints for:
 - Backing up and restoring data
 - Booting a node from a raw SQLite file
 - Checking node status, diagnostic info, cluster membership, and readiness
+- Ability to customize HTTP communications for control over TLS, mutual TLS, timeouts, etc.
 
 ## Installation
 
