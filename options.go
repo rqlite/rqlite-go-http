@@ -9,6 +9,8 @@ import (
 	"time"
 )
 
+// ReadConsistencyLevel indicates the Read Consistency level requested by
+// the user, if any.
 type ReadConsistencyLevel int
 
 const (
@@ -20,6 +22,7 @@ const (
 	ReadConsistencyLevelAuto
 )
 
+// String returns the string representation of a Read Consistency level.
 func (rcl ReadConsistencyLevel) String() string {
 	switch rcl {
 	case ReadConsistencyLevelNone:
