@@ -3,7 +3,7 @@
 [![Go Report Card](https://goreportcard.com/badge/github.com/rqlite/rqlite)](https://goreportcard.com/report/github.com/rqlite/rqlite-go-http)
 [![Go Reference](https://pkg.go.dev/badge/github.com/rqlite/rqlite-go-http.svg)](https://pkg.go.dev/github.com/rqlite/rqlite-go-http)
 
-_rqlite-go-http_ is a "thin" Go-based client for [rqlite](https://rqlite.io) that communicates with its [HTTP API](https://rqlite.io/docs/api/). This client is useful on its own or as a foundation for higher-level libraries.
+_rqlite-go-http_ is a "thin" Go-based client for [rqlite](https://rqlite.io) that communicates directly with the rqlite [HTTP API](https://rqlite.io/docs/api/). This client is useful on its own or as a foundation for higher-level libraries.
 
 This library offers support for:
 
