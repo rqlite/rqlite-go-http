@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"sync/atomic"
 )
 
 // ExecuteResponse represents the JSON returned by /db/execute.
@@ -112,6 +113,8 @@ type Client struct {
 
 	basicAuthUser string
 	basicAuthPass string
+
+	promoteErrors atomic.Bool
 }
 
 // NewClient creates a new Client with default settings. If httpClient is nil,
@@ -143,6 +146,16 @@ func (c *Client) SetBasicAuth(username, password string) {
 	c.basicAuthPass = password
 }
 
+// PromoteErrors enables or disables the promotion of statement-level errors to Go errors.
+//
+// By default an operation on the client only returns an error if there is a failure at
+// the HTTP level. If this method is called with true, then the client will also return
+// an error if there is any failure at the statement level, setting the returned error
+// to the first statement-level error encountered.
+func (c *Client) PromoteErrors(b bool) {
+	c.promoteErrors.Store(b)
+}
+
 // ExecuteSingle performs a single write operation (INSERT, UPDATE, DELETE) using /db/execute.
 // args should be a single map of named parameters, or a slice of positional parameters.
 // It is the caller's responsibility to ensure the correct number and type of parameters.
@@ -155,7 +168,7 @@ func (c *Client) ExecuteSingle(ctx context.Context, statement string, args ...an
 }
 
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
-func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (*ExecuteResponse, error) {
+func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (retEr *ExecuteResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -184,7 +197,13 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 	if err := json.Unmarshal(respBody, &executeResp); err != nil {
 		return nil, err
 	}
-	return &executeResp, nil
+
+	if c.promoteErrors.Load() {
+		if f, i, msg := executeResp.HasError(); f {
+			retErr = fmt.Errorf("statement %d: %s", i, msg)
+		}
+	}
+	return &executeResp, retErr
 }
 
 // QuerySingle performs a single read operation (SELECT) using /db/query.
@@ -199,7 +218,7 @@ func (c *Client) QuerySingle(ctx context.Context, statement string, args ...any)
 }
 
 // Query performs a read operation (SELECT) using /db/query.
-func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *QueryOptions) (*QueryResponse, error) {
+func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *QueryOptions) (retQr *QueryResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -226,7 +245,12 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	if err := json.Unmarshal(respBody, &queryResponse); err != nil {
 		return nil, err
 	}
-	return &queryResponse, nil
+	if c.promoteErrors.Load() {
+		if f, i, msg := queryResponse.HasError(); f {
+			retErr = fmt.Errorf("statement %d: %s", i, msg)
+		}
+	}
+	return &queryResponse, retErr
 }
 
 // RequestSingle sends a single statement using /db/request.
@@ -239,7 +263,7 @@ func (c *Client) RequestSingle(ctx context.Context, statement string) (*RequestR
 
 // Request sends both read and write statements in a single request using /db/request.
 // This method determines read vs. write by inspecting the statements.
-func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (*RequestResponse, error) {
+func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (rr *RequestResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -266,7 +290,12 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	if err := json.Unmarshal(respBody, &reqResp); err != nil {
 		return nil, err
 	}
-	return &reqResp, nil
+	if c.promoteErrors.Load() {
+		if f, i, msg := reqResp.HasError(); f {
+			retErr = fmt.Errorf("statement %d: %s", i, msg)
+		}
+	}
+	return &reqResp, retErr
 }
 
 // Backup requests a copy of the SQLite database from the node. The caller must close the
