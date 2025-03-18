@@ -138,9 +138,9 @@ type NodeOptions struct {
 	Version   string        `uvalue:"ver,omitempty"`
 }
 
-// MakeURLValues converts a struct to a url.Values, using the `uvalue` tag to
+// makeURLValues converts a struct to a url.Values, using the `uvalue` tag to
 // determine the key name.
-func MakeURLValues(input any) (url.Values, error) {
+func makeURLValues(input any) (url.Values, error) {
 	vals := url.Values{}
 	if input == nil {
 		return vals, nil

@@ -269,7 +269,7 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 	if err != nil {
 		return nil, err
 	}
-	queryParams, err := MakeURLValues(opts)
+	queryParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -319,7 +319,7 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	if err != nil {
 		return nil, err
 	}
-	queryParams, err := MakeURLValues(opts)
+	queryParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -367,7 +367,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	if err != nil {
 		return nil, err
 	}
-	reqParams, err := MakeURLValues(opts)
+	reqParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -400,7 +400,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 // Backup requests a copy of the SQLite database from the node. The caller must close the
 // returned ReadCloser when done, regardless of any error.
 func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser, error) {
-	reqParams, err := MakeURLValues(opts)
+	reqParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -418,7 +418,7 @@ func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser,
 // Load streams data from r into the node, to load or restore data. Load automatically
 // detects the format of the data, and can handle both plain text and SQLite binary data.
 func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error {
-	params, err := MakeURLValues(opts)
+	params, err := makeURLValues(opts)
 	if err != nil {
 		return err
 	}
