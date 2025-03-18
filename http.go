@@ -14,14 +14,25 @@ import (
 // ExecuteResponse represents the JSON returned by /db/execute.
 type ExecuteResponse struct {
 	Results        []ExecuteResult `json:"results"`
-	Time           float64         `json:"time"`
+	Time           float64         `json:"time,omitempty"`
 	SequenceNumber int64           `json:"sequence_number,omitempty"`
+}
+
+// HasError returns true if any of the results in the response contain an error.
+// If an error is found, the index of the result and the error message are returned.
+func (er *ExecuteResponse) HasError() (bool, int, string) {
+	for i, result := range er.Results {
+		if result.Error != "" {
+			return true, i, result.Error
+		}
+	}
+	return false, -1, ""
 }
 
 // ExecuteResult is an element of ExecuteResponse.Results.
 type ExecuteResult struct {
-	LastInsertID int64   `json:"last_insert_id,omitempty"`
-	RowsAffected int64   `json:"rows_affected,omitempty"`
+	LastInsertID int64   `json:"last_insert_id"`
+	RowsAffected int64   `json:"rows_affected"`
 	Time         float64 `json:"time,omitempty"`
 	Error        string  `json:"error,omitempty"`
 }
@@ -29,14 +40,25 @@ type ExecuteResult struct {
 // QueryResponse represents the JSON returned by /db/query in the default (non-associative) form.
 type QueryResponse struct {
 	Results []QueryResult `json:"results"`
-	Time    float64       `json:"time"`
+	Time    float64       `json:"time,omitempty"`
+}
+
+// HasError returns true if any of the results in the response contain an error.
+// If an error is found, the index of the result and the error message are returned.
+func (qr *QueryResponse) HasError() (bool, int, string) {
+	for i, result := range qr.Results {
+		if result.Error != "" {
+			return true, i, result.Error
+		}
+	}
+	return false, -1, ""
 }
 
 // QueryResult is an element of QueryResponse.Results.
 type QueryResult struct {
-	Columns []string `json:"columns,omitempty"`
-	Types   []string `json:"types,omitempty"`
-	Values  [][]any  `json:"values,omitempty"`
+	Columns []string `json:"columns"`
+	Types   []string `json:"types"`
+	Values  [][]any  `json:"values"`
 	Time    float64  `json:"time,omitempty"`
 	Error   string   `json:"error,omitempty"`
 }
@@ -44,7 +66,18 @@ type QueryResult struct {
 // RequestResponse represents the JSON returned by /db/request.
 type RequestResponse struct {
 	Results []RequestResult `json:"results"`
-	Time    float64         `json:"time"`
+	Time    float64         `json:"time,omitempty"`
+}
+
+// HasError returns true if any of the results in the response contain an error.
+// If an error is found, the index of the result and the error message are returned.
+func (rr *RequestResponse) HasError() (bool, int, string) {
+	for i, result := range rr.Results {
+		if result.Error != "" {
+			return true, i, result.Error
+		}
+	}
+	return false, -1, ""
 }
 
 // RequestResult is an element of RequestResponse.Results.
@@ -53,11 +86,11 @@ type RequestResult struct {
 	// Same fields as QueryResult plus ExecuteResult fields.
 	// If read-only, LastInsertID and RowsAffected would be empty;
 	// if write-only, Columns and Values would be empty.
-	Columns      []string `json:"columns,omitempty"`
-	Types        []string `json:"types,omitempty"`
-	Values       [][]any  `json:"values,omitempty"`
-	LastInsertID *int64   `json:"last_insert_id,omitempty"`
-	RowsAffected *int64   `json:"rows_affected,omitempty"`
+	Columns      []string `json:"columns"`
+	Types        []string `json:"types"`
+	Values       [][]any  `json:"values"`
+	LastInsertID *int64   `json:"last_insert_id"`
+	RowsAffected *int64   `json:"rows_affected"`
 	Error        string   `json:"error,omitempty"`
 	Time         float64  `json:"time,omitempty"`
 }
@@ -111,11 +144,14 @@ func (c *Client) SetBasicAuth(username, password string) {
 }
 
 // ExecuteSingle performs a single write operation (INSERT, UPDATE, DELETE) using /db/execute.
-func (c *Client) ExecuteSingle(ctx context.Context, statement string) (*ExecuteResponse, error) {
-	statements := SQLStatements{
-		{SQL: statement},
+// args should be a single map of named parameters, or a slice of positional parameters.
+// It is the caller's responsibility to ensure the correct number and type of parameters.
+func (c *Client) ExecuteSingle(ctx context.Context, statement string, args ...any) (*ExecuteResponse, error) {
+	stmt, err := NewSQLStatementFrom(statement, args...)
+	if err != nil {
+		return nil, err
 	}
-	return c.Execute(ctx, statements, nil)
+	return c.Execute(ctx, SQLStatements{stmt}, nil)
 }
 
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
@@ -152,11 +188,14 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 }
 
 // QuerySingle performs a single read operation (SELECT) using /db/query.
-func (c *Client) QuerySingle(ctx context.Context, statement string) (*QueryResponse, error) {
-	statements := SQLStatements{
-		{SQL: statement},
+// args should be a single map of named parameters, or a slice of positional parameters.
+// It is the caller's responsibility to ensure the correct number and type of parameters.
+func (c *Client) QuerySingle(ctx context.Context, statement string, args ...any) (*QueryResponse, error) {
+	stmt, err := NewSQLStatementFrom(statement, args...)
+	if err != nil {
+		return nil, err
 	}
-	return c.Query(ctx, statements, nil)
+	return c.Query(ctx, SQLStatements{stmt}, nil)
 }
 
 // Query performs a read operation (SELECT) using /db/query.
