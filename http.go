@@ -80,14 +80,12 @@ func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
-	// Attempt to unmarshal Results into []QueryResult.
 	var res []QueryResult
 	if err := json.Unmarshal(aux.Results, &res); err == nil {
 		qr.Results = res
 		return nil
 	}
 
-	// Attempt to unmarshal Results into []QueryResultAssoc.
 	var resAssoc []QueryResultAssoc
 	if err := json.Unmarshal(aux.Results, &resAssoc); err == nil {
 		qr.Results = resAssoc
@@ -115,19 +113,59 @@ type QueryResultAssoc struct {
 
 // RequestResponse represents the JSON returned by /db/request.
 type RequestResponse struct {
-	Results []RequestResult `json:"results"`
-	Time    float64         `json:"time,omitempty"`
+	Results any     `json:"results"`
+	Time    float64 `json:"time,omitempty"`
 }
 
 // HasError returns true if any of the results in the response contain an error.
 // If an error is found, the index of the result and the error message are returned.
 func (rr *RequestResponse) HasError() (bool, int, string) {
-	for i, result := range rr.Results {
-		if result.Error != "" {
-			return true, i, result.Error
+	switch v := rr.Results.(type) {
+	case []RequestResult:
+		for i, result := range v {
+			if result.Error != "" {
+				return true, i, result.Error
+			}
+		}
+	case []RequestResultAssoc:
+		for i, result := range v {
+			if result.Error != "" {
+				return true, i, result.Error
+			}
 		}
 	}
 	return false, -1, ""
+}
+
+// UnmarshalJSON implements the json.Unmarshaler interface for RequestResponse.
+func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
+	// Define an alias to avoid recursion.
+	type Alias RequestResponse
+	aux := &struct {
+		Results json.RawMessage `json:"results"`
+		*Alias
+	}{
+		Alias: (*Alias)(qr),
+	}
+
+	// Unmarshal into the auxiliary struct.
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+
+	var res []RequestResult
+	if err := json.Unmarshal(aux.Results, &res); err == nil {
+		qr.Results = res
+		return nil
+	}
+
+	var resAssoc []RequestResultAssoc
+	if err := json.Unmarshal(aux.Results, &resAssoc); err == nil {
+		qr.Results = resAssoc
+		return nil
+	}
+
+	return fmt.Errorf("unable to unmarshal results into either []RequestResult or []RequestResultAssoc")
 }
 
 // RequestResult is an element of RequestResponse.Results.
@@ -143,6 +181,15 @@ type RequestResult struct {
 	RowsAffected *int64   `json:"rows_affected"`
 	Error        string   `json:"error,omitempty"`
 	Time         float64  `json:"time,omitempty"`
+}
+
+type RequestResultAssoc struct {
+	Types        map[string]string `json:"types"`
+	Rows         []map[string]any  `json:"rows"`
+	LastInsertID *int64            `json:"last_insert_id"`
+	RowsAffected *int64            `json:"rows_affected"`
+	Error        string            `json:"error,omitempty"`
+	Time         float64           `json:"time,omitempty"`
 }
 
 // Client is the main type through which rqlite is accessed.
