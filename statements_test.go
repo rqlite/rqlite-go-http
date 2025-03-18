@@ -26,7 +26,7 @@ func Test_NewSQLStatementFrom_Positional(t *testing.T) {
 			want: &SQLStatement{SQL: "SELECT * FROM foo WHERE id = ? AND name = ?", PositionalParams: []any{42, "hello"}},
 		},
 	} {
-		got, err := NewSQLStatementFrom(tt.stmt, tt.args...)
+		got, err := NewSQLStatement(tt.stmt, tt.args...)
 		if err != nil {
 			t.Fatalf("[%d] %v", i, err)
 		}
@@ -37,7 +37,7 @@ func Test_NewSQLStatementFrom_Positional(t *testing.T) {
 }
 
 func Test_NewSQLStatementFrom_Named(t *testing.T) {
-	got, err := NewSQLStatementFrom("SELECT * FROM foo WHERE id = :id AND name = :name", map[string]any{
+	got, err := NewSQLStatement("SELECT * FROM foo WHERE id = :id AND name = :name", map[string]any{
 		"id":   42,
 		"name": "hello",
 	})

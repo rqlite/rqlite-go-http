@@ -18,9 +18,9 @@ type SQLStatement struct {
 	NamedParams map[string]any
 }
 
-// NewSQLStatementFrom creates a new SQLStatement from a SQL string and optional parameters.
+// NewSQLStatement creates a new SQLStatement from a SQL string and optional parameters.
 // The parameters can be either a map of named parameters, or a slice of positional parameters.
-func NewSQLStatementFrom(stmt string, args ...any) (*SQLStatement, error) {
+func NewSQLStatement(stmt string, args ...any) (*SQLStatement, error) {
 	s := SQLStatement{SQL: stmt}
 	if len(args) == 0 {
 		return &s, nil

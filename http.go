@@ -160,7 +160,7 @@ func (c *Client) PromoteErrors(b bool) {
 // args should be a single map of named parameters, or a slice of positional parameters.
 // It is the caller's responsibility to ensure the correct number and type of parameters.
 func (c *Client) ExecuteSingle(ctx context.Context, statement string, args ...any) (*ExecuteResponse, error) {
-	stmt, err := NewSQLStatementFrom(statement, args...)
+	stmt, err := NewSQLStatement(statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -210,7 +210,7 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 // args should be a single map of named parameters, or a slice of positional parameters.
 // It is the caller's responsibility to ensure the correct number and type of parameters.
 func (c *Client) QuerySingle(ctx context.Context, statement string, args ...any) (*QueryResponse, error) {
-	stmt, err := NewSQLStatementFrom(statement, args...)
+	stmt, err := NewSQLStatement(statement, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -253,12 +253,15 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	return &queryResponse, retErr
 }
 
-// RequestSingle sends a single statement using /db/request.
-func (c *Client) RequestSingle(ctx context.Context, statement string) (*RequestResponse, error) {
-	statements := SQLStatements{
-		{SQL: statement},
+// RequestSingle sends a single statement using /db/request. args should be a single map
+// of named parameters, or a slice of positional parameters.
+// It is the caller's responsibility to ensure the correct number and type of parameters.
+func (c *Client) RequestSingle(ctx context.Context, statement string, args ...any) (*RequestResponse, error) {
+	stmt, err := NewSQLStatement(statement, args...)
+	if err != nil {
+		return nil, err
 	}
-	return c.Request(ctx, statements, nil)
+	return c.Request(ctx, SQLStatements{stmt}, nil)
 }
 
 // Request sends both read and write statements in a single request using /db/request.
