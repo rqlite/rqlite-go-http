@@ -106,14 +106,14 @@ func Test_Execute(t *testing.T) {
 		},
 		{
 			name:         "single INSERT statement with positional arguments",
-			statements:   SQLStatements{SQLStatement{SQL: "INSERT INTO foo VALUES(?, ?)", PositionalParams: []any{"name", float64(123)}}},
+			statements:   SQLStatements{&SQLStatement{SQL: "INSERT INTO foo VALUES(?, ?)", PositionalParams: []any{"name", float64(123)}}},
 			opts:         nil,
 			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
 			expURLValues: nil,
 		},
 		{
 			name:         "single INSERT statement with named arguments",
-			statements:   SQLStatements{SQLStatement{SQL: "INSERT INTO foo VALUES(:name, :age)", NamedParams: map[string]any{"name": "name", "age": float64(123)}}},
+			statements:   SQLStatements{&SQLStatement{SQL: "INSERT INTO foo VALUES(:name, :age)", NamedParams: map[string]any{"name": "name", "age": float64(123)}}},
 			opts:         nil,
 			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
 			expURLValues: nil,

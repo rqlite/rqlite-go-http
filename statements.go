@@ -18,6 +18,24 @@ type SQLStatement struct {
 	NamedParams map[string]any
 }
 
+// NewSQLStatementFrom creates a new SQLStatement from a SQL string and optional parameters.
+// The parameters can be either a map of named parameters, or a slice of positional parameters.
+func NewSQLStatementFrom(stmt string, args ...any) (*SQLStatement, error) {
+	s := SQLStatement{SQL: stmt}
+	if len(args) == 0 {
+		return &s, nil
+	}
+
+	if len(args) == 1 {
+		if n, ok := args[0].(map[string]any); ok {
+			s.NamedParams = n
+			return &s, nil
+		}
+	}
+	s.PositionalParams = args
+	return &s, nil
+}
+
 // MarshalJSON implements a custom JSON representation so that SQL statements
 // always appear as an array in the format rqlite expects.
 func (s SQLStatement) MarshalJSON() ([]byte, error) {
@@ -85,12 +103,12 @@ func (s *SQLStatement) UnmarshalJSON(data []byte) error {
 }
 
 // SQLStatements is a slice of SQLStatement.
-type SQLStatements []SQLStatement
+type SQLStatements []*SQLStatement
 
 func NewSQLStatementsFromStrings(stmts []string) SQLStatements {
 	s := make(SQLStatements, len(stmts))
 	for i, stmt := range stmts {
-		s[i] = SQLStatement{SQL: stmt}
+		s[i] = &SQLStatement{SQL: stmt}
 	}
 	return s
 }
@@ -98,11 +116,11 @@ func NewSQLStatementsFromStrings(stmts []string) SQLStatements {
 // MarshalJSON for SQLStatements produces a JSON array whose
 // elements are each statement’s custom JSON form.
 func (sts SQLStatements) MarshalJSON() ([]byte, error) {
-	return json.Marshal([]SQLStatement(sts))
+	return json.Marshal([]*SQLStatement(sts))
 }
 
 func (sts *SQLStatements) UnmarshalJSON(data []byte) error {
-	var stmts []SQLStatement
+	var stmts []*SQLStatement
 	if err := json.Unmarshal(data, &stmts); err != nil {
 		return err
 	}
