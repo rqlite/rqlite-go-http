@@ -96,7 +96,7 @@ type QueryOptions struct {
 	Timeout time.Duration `uvalue:"timeout,omitempty"`
 
 	// Pretty controls whether pretty-printed JSON should be returned.
-	Pretty  bool `uvalue:"pretty,omitempty"`
+	Pretty bool `uvalue:"pretty,omitempty"`
 
 	// Timings controls whether the response should including timing information.
 	Timings bool `uvalue:"timings,omitempty"`
