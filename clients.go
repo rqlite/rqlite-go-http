@@ -16,8 +16,9 @@ func DefaultClient() *http.Client {
 }
 
 // NewTLSClientInsecure returns an HTTP client configured for simple TLS, but
-// skipping server certificate verification.
-func NewTLSClientInsecure(skipVerify bool) (*http.Client, error) {
+// skipping server certificate verification. The client's timeout is
+// set as 5 seconds.
+func NewTLSClientInsecure() (*http.Client, error) {
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
