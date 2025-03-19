@@ -18,7 +18,7 @@ This library offers support for:
 ## Installation
 
 ```bash
-go get github.com/rqlite/http
+go get github.com/rqlite/rqlite-go-http
 ```
 
 ## Example use
