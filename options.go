@@ -43,34 +43,32 @@ func (rcl ReadConsistencyLevel) String() string {
 // BackupOptions holds optional parameters for a backup operation.
 type BackupOptions struct {
 	// Format can be "sql" if a SQL text dump is desired, otherwise an empty string
-	// (or something else) means a binary SQLite file is returned.
+	// (or anything else) means a binary SQLite file is returned.
 	Format string `uvalue:"fmt,omitempty"`
 
 	// If set, request that the backup be vacuumed before returning it.
 	Vacuum bool `uvalue:"vacuum,omitempty"`
 
 	// If set, request that the backup be GZIP-compressed.
-	// e.g. /db/backup?compress
 	Compress bool `uvalue:"compress,omitempty"`
 
 	// If set, ask a Follower not to forward the request to the Leader and instead
-	// read its local database and return that as the backup.
+	// read its local database and return that as the backup data.
 	NoLeader bool `uvalue:"noleader,omitempty"`
 
-	// If set, instruct a Follower to return a redirect instead of forwarding.
+	// If set, instruct a Follower to return a redirect to the Leader instead of forwarding.
 	Redirect bool `uvalue:"redirect,omitempty"`
 }
 
 // LoadOptions configures how to load data into the node.
 type LoadOptions struct {
 	// If set, instruct a Follower to return a redirect instead of forwarding.
-	// e.g. /db/load?redirect
 	Redirect bool `uvalue:"redirect,omitempty"`
 }
 
 // ExecuteOptions holds optional settings for /db/execute requests.
 type ExecuteOptions struct {
-	// Transaction indicates whether statements should be enclosed in a transaction.
+	// Transaction indicates whether the statements should be enclosed in a transaction.
 	Transaction bool `uvalue:"transaction,omitempty"`
 
 	// Pretty requests pretty-printed JSON.
@@ -97,7 +95,10 @@ type QueryOptions struct {
 	// Timeout is applied at the database level.
 	Timeout time.Duration `uvalue:"timeout,omitempty"`
 
+	// Pretty controls whether pretty-printed JSON should be returned.
 	Pretty  bool `uvalue:"pretty,omitempty"`
+
+	// Timings controls whether the response should including timing information.
 	Timings bool `uvalue:"timings,omitempty"`
 
 	// Associative signals whether to request the "associative" form of results.
@@ -106,6 +107,7 @@ type QueryOptions struct {
 	// BlobAsArray signals whether to request the BLOB data as arrays of byte values.
 	BlobAsArray bool `uvalue:"blob_array,omitempty"`
 
+	// Level controls the read consistency level for the query.
 	Level               ReadConsistencyLevel `uvalue:"level,omitempty"`
 	LinearizableTimeout time.Duration        `uvalue:"linearizable_timeout,omitempty"`
 	Freshness           time.Duration        `uvalue:"freshness,omitempty"`
