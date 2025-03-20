@@ -15,6 +15,8 @@ This library offers support for:
 - Checking node status, diagnostic info, cluster membership, and readiness
 - Ability to customize HTTP communications for control over TLS, mutual TLS, timeouts, etc.
 
+Check out the [documentation](https://pkg.go.dev/github.com/rqlite/rqlite-go-http) for more details.
+
 ## Installation
 
 ```bash
