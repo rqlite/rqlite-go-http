@@ -751,6 +751,31 @@ func Test_Nodes(t *testing.T) {
 	}
 }
 
+func Test_RemoveNode(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/remove" {
+			t.Errorf("expected path /remove, got %s", r.URL.Path)
+		}
+		if r.Method != http.MethodDelete {
+			t.Errorf("expected DELETE method, got %s", r.Method)
+		}
+		w.WriteHeader(http.StatusOK)
+		b, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed reading request body: %v", err)
+		}
+		if string(b) != `{"id":"id1"}` {
+			t.Errorf("unexpected request body: %q", b)
+		}
+	}))
+	defer server.Close()
+
+	cl := NewClient(server.URL, nil)
+	if err := cl.RemoveNode(context.Background(), "id1"); err != nil {
+		t.Fatalf("unexpected error calling RemoveNode: %v", err)
+	}
+}
+
 func mustUnmarshalQueryResponse(s string) QueryResponse {
 	var qr QueryResponse
 	if err := json.Unmarshal([]byte(s), &qr); err != nil {

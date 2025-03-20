@@ -283,6 +283,7 @@ type Client struct {
 	expvarURL  string
 	nodesURL   string
 	readyURL   string
+	removeURL  string
 
 	basicAuthUser string
 	basicAuthPass string
@@ -305,6 +306,7 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		expvarURL:  baseURL + "/debug/vars",
 		nodesURL:   baseURL + "/nodes",
 		readyURL:   baseURL + "/readyz",
+		removeURL:  baseURL + "/remove",
 	}
 	if cl.httpClient == nil {
 		cl.httpClient = DefaultHTTPClient()
@@ -519,6 +521,12 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error 
 // the underlying SQLite store from scratch. This is done via a POST to /boot.
 func (c *Client) Boot(ctx context.Context, r io.Reader) error {
 	_, err := c.doOctetStreamPostRequest(ctx, c.bootURL, nil, r)
+	return err
+}
+
+func (c *Client) RemoveNode(ctx context.Context, id string) error {
+	body := fmt.Sprintf(`{"id":"%s"}`, id)
+	_, err := c.doRequest(ctx, "DELETE", c.removeURL, "application/json", nil, bytes.NewReader([]byte(body)))
 	return err
 }
 
