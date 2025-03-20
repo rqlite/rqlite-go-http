@@ -574,6 +574,40 @@ func Test_RequestAssoc(t *testing.T) {
 	}
 }
 
+func Test_PromoteErrors(t *testing.T) {
+	respBody := `{"results": [{"last_insert_id": 0, "rows_affected": 0}]}`
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(respBody))
+	}))
+	defer ts.Close()
+
+	client := NewClient(ts.URL, nil)
+	defer client.Close()
+	_, err := client.Execute(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+
+	respBody = `{"results": [{"error": "some error"}]}`
+	_, err = client.Execute(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+
+	client.PromoteErrors(true)
+	_, err = client.Execute(context.Background(), nil, nil)
+	if err == nil {
+		t.Fatalf("Expected non-nil error after promoting errors, got nil")
+	}
+
+	client.PromoteErrors(false)
+	_, err = client.Execute(context.Background(), nil, nil)
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+}
+
 func Test_Boot(t *testing.T) {
 	expectedData := []byte("some raw SQLite bytes")
 
