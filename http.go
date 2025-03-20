@@ -596,7 +596,7 @@ func (c *Client) doPlainPostRequest(ctx context.Context, url string, values url.
 }
 
 // doRequest builds and executes an HTTP request, returning the response.
-func (c *Client) doRequest(ctx context.Context, method, url string, contentTpe string, values url.Values, body io.Reader) (*http.Response, error) {
+func (c *Client) doRequest(ctx context.Context, method, url string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
 	fullURL := url
 	if values != nil {
 		fullURL += "?" + values.Encode()
@@ -605,8 +605,8 @@ func (c *Client) doRequest(ctx context.Context, method, url string, contentTpe s
 	if err != nil {
 		return nil, err
 	}
-	if contentTpe != "" {
-		req.Header.Set("Content-Type", contentTpe)
+	if contentType != "" {
+		req.Header.Set("Content-Type", contentType)
 	}
 
 	// If Basic Auth is configured, add an Authorization header
