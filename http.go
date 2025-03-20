@@ -574,7 +574,7 @@ func (c *Client) Ready(ctx context.Context) (io.ReadCloser, error) {
 	return resp.Body, nil
 }
 
-// Close can clean up any long-lived resources owned by the Client, if needed.
+// Close closes the client and should be called when the client is no longer needed.
 func (c *Client) Close() error {
 	return nil
 }
