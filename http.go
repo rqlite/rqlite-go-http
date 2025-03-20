@@ -16,17 +16,17 @@ import (
 	"time"
 )
 
-// DefaultClient returns an HTTP client with a 5-second timeout.
-func DefaultClient() *http.Client {
+// DefaultHTTPClient returns an HTTP client with a 5-second timeout.
+func DefaultHTTPClient() *http.Client {
 	return &http.Client{
 		Timeout: 5 * time.Second,
 	}
 }
 
-// NewTLSClientInsecure returns an HTTP client configured for simple TLS, but
+// NewHTTPTLSClientInsecure returns an HTTP client configured for simple TLS, but
 // skipping server certificate verification. The client's timeout is
 // set as 5 seconds.
-func NewTLSClientInsecure() (*http.Client, error) {
+func NewHTTPTLSClientInsecure() (*http.Client, error) {
 	return &http.Client{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{
@@ -37,9 +37,9 @@ func NewTLSClientInsecure() (*http.Client, error) {
 	}, nil
 }
 
-// NewTLSClient returns an HTTP client configured for simple TLS, using the
+// NewHTTPTLSClient returns an HTTP client configured for simple TLS, using the
 // provided CA certificate.
-func NewTLSClient(caCertPath string) (*http.Client, error) {
+func NewHTTPTLSClient(caCertPath string) (*http.Client, error) {
 	config := &tls.Config{}
 
 	asn1Data, err := os.ReadFile(caCertPath)
@@ -60,9 +60,9 @@ func NewTLSClient(caCertPath string) (*http.Client, error) {
 	}, nil
 }
 
-// NewMutualTLSClient returns an HTTP client configured for mutual TLS.
+// NewHTTPMutualTLSClient returns an HTTP client configured for mutual TLS.
 // It accepts paths for the client cert, client key, and trusted CA.
-func NewMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string) (*http.Client, error) {
+func NewHTTPMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string) (*http.Client, error) {
 	config := &tls.Config{}
 
 	asn1Data, err := os.ReadFile(caCertPath)
@@ -307,7 +307,7 @@ func NewClient(baseURL string, httpClient *http.Client) *Client {
 		readyURL:   baseURL + "/readyz",
 	}
 	if cl.httpClient == nil {
-		cl.httpClient = DefaultClient()
+		cl.httpClient = DefaultHTTPClient()
 	}
 	return cl
 }
