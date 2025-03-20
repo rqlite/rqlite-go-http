@@ -49,7 +49,7 @@ func NewHTTPTLSClient(caCertPath string) (*http.Client, error) {
 	config.RootCAs = x509.NewCertPool()
 	ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
 	if !ok {
-		return nil, err
+		return nil, fmt.Errorf("failed to append CA certs from PEM")
 	}
 
 	return &http.Client{
@@ -72,7 +72,7 @@ func NewHTTPMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string) (*
 	config.RootCAs = x509.NewCertPool()
 	ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
 	if !ok {
-		return nil, err
+		return nil, fmt.Errorf("failed to append CA certs from PEM")
 	}
 
 	cert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
