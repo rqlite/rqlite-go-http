@@ -124,10 +124,7 @@ func (sts *SQLStatements) UnmarshalJSON(data []byte) error {
 	if err := json.Unmarshal(data, &stmts); err != nil {
 		return err
 	}
-	s := make(SQLStatements, len(stmts))
-	*sts = s
-	for i, stmt := range stmts {
-		s[i] = stmt
-	}
+	*sts = stmts
 	return nil
+
 }
