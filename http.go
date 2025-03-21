@@ -121,6 +121,23 @@ type QueryResponse struct {
 	Time    float64 `json:"time,omitempty"`
 }
 
+// QueryResult is an element of QueryResponse.Results.
+type QueryResult struct {
+	Columns []string `json:"columns"`
+	Types   []string `json:"types"`
+	Values  [][]any  `json:"values"`
+	Time    float64  `json:"time,omitempty"`
+	Error   string   `json:"error,omitempty"`
+}
+
+// QueryResultAssoc is an element of QueryResponse.Results, but in an associative form.
+type QueryResultAssoc struct {
+	Types map[string]string `json:"types"`
+	Rows  []map[string]any  `json:"rows"`
+	Time  float64           `json:"time,omitempty"`
+	Error string            `json:"error,omitempty"`
+}
+
 // HasError returns true if any of the results in the response contain an error.
 // If an error is found, the index of the result and the error message are returned.
 func (qr *QueryResponse) HasError() (bool, int, string) {
@@ -139,6 +156,20 @@ func (qr *QueryResponse) HasError() (bool, int, string) {
 		}
 	}
 	return false, -1, ""
+}
+
+// GetQueryResults returns the results as a slice of QueryResult. This can be convenient
+// when the caller knows the type of the results in advance. If the results are not a
+// slice of QueryResult, a panic will occur.
+func (qr *QueryResponse) GetQueryResults() []QueryResult {
+	return qr.Results.([]QueryResult)
+}
+
+// GetQueryResultsAssoc returns the results as a slice of QueryResultAssoc. This can be
+// convenient when the caller knows the type of the results in advance. If the results
+// are not a slice of QueryResultAssoc, a panic will occur.
+func (qr *QueryResponse) GetQueryResultsAssoc() []QueryResultAssoc {
+	return qr.Results.([]QueryResultAssoc)
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for QueryResponse.
@@ -172,26 +203,50 @@ func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("unable to unmarshal results into either []QueryResult or []QueryResultAssoc")
 }
 
-// QueryResult is an element of QueryResponse.Results.
-type QueryResult struct {
-	Columns []string `json:"columns"`
-	Types   []string `json:"types"`
-	Values  [][]any  `json:"values"`
-	Time    float64  `json:"time,omitempty"`
-	Error   string   `json:"error,omitempty"`
-}
-
-type QueryResultAssoc struct {
-	Types map[string]string `json:"types"`
-	Rows  []map[string]any  `json:"rows"`
-	Time  float64           `json:"time,omitempty"`
-	Error string            `json:"error,omitempty"`
-}
-
 // RequestResponse represents the JSON returned by /db/request.
 type RequestResponse struct {
 	Results any     `json:"results"`
 	Time    float64 `json:"time,omitempty"`
+}
+
+// RequestResult is an element of RequestResponse.Results.
+// It may include either Query-like results, Execute-like results, or both.
+type RequestResult struct {
+	// Same fields as QueryResult plus ExecuteResult fields.
+	// If read-only, LastInsertID and RowsAffected would be empty;
+	// if write-only, Columns and Values would be empty.
+	Columns      []string `json:"columns"`
+	Types        []string `json:"types"`
+	Values       [][]any  `json:"values"`
+	LastInsertID *int64   `json:"last_insert_id"`
+	RowsAffected *int64   `json:"rows_affected"`
+	Error        string   `json:"error,omitempty"`
+	Time         float64  `json:"time,omitempty"`
+}
+
+// RequestResultAssoc is an element of RequestResponse.Results, but in an associative form.
+// It may include Query-like results, Execute-like results, or both.
+type RequestResultAssoc struct {
+	Types        map[string]string `json:"types"`
+	Rows         []map[string]any  `json:"rows"`
+	LastInsertID *int64            `json:"last_insert_id"`
+	RowsAffected *int64            `json:"rows_affected"`
+	Error        string            `json:"error,omitempty"`
+	Time         float64           `json:"time,omitempty"`
+}
+
+// GetRequestResults returns the results as a slice of RequestResult. This can be convenient
+// when the caller does not know the type of the results in advance. If the results are not
+// a slice of RequestResult, a panic will occur.
+func (rr *RequestResponse) GetRequestResults() []RequestResult {
+	return rr.Results.([]RequestResult)
+}
+
+// GetRequestResultsAssoc returns the results as a slice of RequestResultAssoc. This can be
+// convenient when the caller does not know the type of the results in advance. If the results
+// are not a slice of RequestResultAssoc, a panic will occur.
+func (rr *RequestResponse) GetRequestResultsAssoc() []RequestResultAssoc {
+	return rr.Results.([]RequestResultAssoc)
 }
 
 // HasError returns true if any of the results in the response contain an error.
@@ -243,30 +298,6 @@ func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
 	}
 
 	return fmt.Errorf("unable to unmarshal results into either []RequestResult or []RequestResultAssoc")
-}
-
-// RequestResult is an element of RequestResponse.Results.
-// It may include either Query-like results or Execute-like results, or an error.
-type RequestResult struct {
-	// Same fields as QueryResult plus ExecuteResult fields.
-	// If read-only, LastInsertID and RowsAffected would be empty;
-	// if write-only, Columns and Values would be empty.
-	Columns      []string `json:"columns"`
-	Types        []string `json:"types"`
-	Values       [][]any  `json:"values"`
-	LastInsertID *int64   `json:"last_insert_id"`
-	RowsAffected *int64   `json:"rows_affected"`
-	Error        string   `json:"error,omitempty"`
-	Time         float64  `json:"time,omitempty"`
-}
-
-type RequestResultAssoc struct {
-	Types        map[string]string `json:"types"`
-	Rows         []map[string]any  `json:"rows"`
-	LastInsertID *int64            `json:"last_insert_id"`
-	RowsAffected *int64            `json:"rows_affected"`
-	Error        string            `json:"error,omitempty"`
-	Time         float64           `json:"time,omitempty"`
 }
 
 // Client is the main type through which rqlite is accessed.
