@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -650,18 +649,16 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 	}
 	fullURL.RawQuery = currValues.Encode()
 
+	if c.basicAuthUser != "" || c.basicAuthPass != "" {
+		fullURL.User = url.UserPassword(c.basicAuthUser, c.basicAuthPass)
+	}
+
 	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
 	if contentType != "" {
 		req.Header.Set("Content-Type", contentType)
-	}
-
-	// If Basic Auth is configured, add an Authorization header
-	if c.basicAuthUser != "" || c.basicAuthPass != "" {
-		auth := base64.StdEncoding.EncodeToString([]byte(fmt.Sprintf("%s:%s", c.basicAuthUser, c.basicAuthPass)))
-		req.Header.Set("Authorization", "Basic "+auth)
 	}
 
 	resp, err := c.httpClient.Do(req)
