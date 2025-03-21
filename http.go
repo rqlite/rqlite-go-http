@@ -300,25 +300,26 @@ func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
 	return fmt.Errorf("unable to unmarshal results into either []RequestResult or []RequestResultAssoc")
 }
 
+const (
+	executePath = "/db/execute"
+	queryPath   = "/db/query"
+	requestPath = "/db/request"
+	backupPath  = "/db/backup"
+	loadPath    = "/db/load"
+	bootPath    = "/boot"
+	statusPath  = "/status"
+	expvarPath  = "/debug/vars"
+	nodesPath   = "/nodes"
+	readyPath   = "/readyz"
+	removePath  = "/remove"
+)
+
 // Client is the main type through which rqlite is accessed.
 type Client struct {
-	httpClient *http.Client
-
-	executeURL string
-	queryURL   string
-	requestURL string
-	backupURL  string
-	loadURL    string
-	bootURL    string
-	statusURL  string
-	expvarURL  string
-	nodesURL   string
-	readyURL   string
-	removeURL  string
-
+	baseURL       string
+	httpClient    *http.Client
 	basicAuthUser string
 	basicAuthPass string
-
 	promoteErrors atomic.Bool
 }
 
@@ -326,18 +327,8 @@ type Client struct {
 // the the default client is used.
 func NewClient(baseURL string, httpClient *http.Client) *Client {
 	cl := &Client{
+		baseURL:    baseURL,
 		httpClient: httpClient,
-		executeURL: baseURL + "/db/execute",
-		queryURL:   baseURL + "/db/query",
-		requestURL: baseURL + "/db/request",
-		backupURL:  baseURL + "/db/backup",
-		loadURL:    baseURL + "/db/load",
-		bootURL:    baseURL + "/boot",
-		statusURL:  baseURL + "/status",
-		expvarURL:  baseURL + "/debug/vars",
-		nodesURL:   baseURL + "/nodes",
-		readyURL:   baseURL + "/readyz",
-		removeURL:  baseURL + "/remove",
 	}
 	if cl.httpClient == nil {
 		cl.httpClient = DefaultHTTPClient()
@@ -384,7 +375,7 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 		return nil, err
 	}
 
-	resp, err := c.doJSONPostRequest(ctx, c.executeURL, queryParams, bytes.NewReader(body))
+	resp, err := c.doJSONPostRequest(ctx, executePath, queryParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -434,7 +425,7 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 		return nil, err
 	}
 
-	resp, err := c.doJSONPostRequest(ctx, c.queryURL, queryParams, bytes.NewReader(body))
+	resp, err := c.doJSONPostRequest(ctx, queryPath, queryParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -482,7 +473,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 		return nil, err
 	}
 
-	resp, err := c.doJSONPostRequest(ctx, c.requestURL, reqParams, bytes.NewReader(body))
+	resp, err := c.doJSONPostRequest(ctx, requestPath, reqParams, bytes.NewReader(body))
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +506,7 @@ func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser,
 		return nil, err
 	}
 
-	resp, err := c.doGetRequest(ctx, c.backupURL, reqParams)
+	resp, err := c.doGetRequest(ctx, backupPath, reqParams)
 	if err != nil {
 		return nil, err
 	}
@@ -541,9 +532,9 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error 
 	}
 
 	if validSQLiteData(first13) {
-		_, err = c.doOctetStreamPostRequest(ctx, c.loadURL, params, io.MultiReader(bytes.NewReader(first13), r))
+		_, err = c.doOctetStreamPostRequest(ctx, loadPath, params, io.MultiReader(bytes.NewReader(first13), r))
 	} else {
-		_, err = c.doPlainPostRequest(ctx, c.loadURL, params, io.MultiReader(bytes.NewReader(first13), r))
+		_, err = c.doPlainPostRequest(ctx, loadPath, params, io.MultiReader(bytes.NewReader(first13), r))
 	}
 	return err
 }
@@ -551,20 +542,20 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error 
 // Boot streams a raw SQLite file into a single-node system, effectively initializing
 // the underlying SQLite database from scratch. This is done via a POST to /boot.
 func (c *Client) Boot(ctx context.Context, r io.Reader) error {
-	_, err := c.doOctetStreamPostRequest(ctx, c.bootURL, nil, r)
+	_, err := c.doOctetStreamPostRequest(ctx, bootPath, nil, r)
 	return err
 }
 
 // RemoveNode removes a node from the cluster. The node is identified by its ID.
 func (c *Client) RemoveNode(ctx context.Context, id string) error {
 	body := fmt.Sprintf(`{"id":"%s"}`, id)
-	_, err := c.doRequest(ctx, "DELETE", c.removeURL, "application/json", nil, bytes.NewReader([]byte(body)))
+	_, err := c.doRequest(ctx, "DELETE", removePath, "application/json", nil, bytes.NewReader([]byte(body)))
 	return err
 }
 
 // Status returns the status of the node.
 func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
-	resp, err := c.doGetRequest(ctx, c.statusURL, nil)
+	resp, err := c.doGetRequest(ctx, statusPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -578,7 +569,7 @@ func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 
 // Expvar returns the expvar data from the node.
 func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
-	resp, err := c.doGetRequest(ctx, c.expvarURL, nil)
+	resp, err := c.doGetRequest(ctx, expvarPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -592,7 +583,7 @@ func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
 
 // Nodes returns the list of known nodes in the cluster.
 func (c *Client) Nodes(ctx context.Context) (json.RawMessage, error) {
-	resp, err := c.doGetRequest(ctx, c.nodesURL, nil)
+	resp, err := c.doGetRequest(ctx, nodesPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -607,7 +598,7 @@ func (c *Client) Nodes(ctx context.Context) (json.RawMessage, error) {
 // Ready returns the readiness of the node. The caller must close the returned ReadCloser
 // when done, regardless of any error.
 func (c *Client) Ready(ctx context.Context) (io.ReadCloser, error) {
-	resp, err := c.doGetRequest(ctx, c.readyURL, nil)
+	resp, err := c.doGetRequest(ctx, readyPath, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -637,7 +628,7 @@ func (c *Client) doPlainPostRequest(ctx context.Context, url string, values url.
 
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, url string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
-	fullURL := url
+	fullURL := c.baseURL + url
 	if values != nil {
 		fullURL += "?" + values.Encode()
 	}
