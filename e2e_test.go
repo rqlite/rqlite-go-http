@@ -2,26 +2,15 @@ package http
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
 )
 
-var host string
-
-func init() {
-	flag.StringVar(&host, "host", "localhost", "Host to connect to")
-}
-
-func TestMain(m *testing.M) {
-	flag.Parse()
-	os.Exit(m.Run())
-}
-
 func Test_EndToEnd(t *testing.T) {
-	if _, ok := os.LookupEnv("CIRCLECI"); !ok {
-		t.Skip("Skipping end-to-end test")
+	host, ok := os.LookupEnv("RQLITE_GO_HTTP_E2E_HOST")
+	if !ok {
+		t.Skip("Skipping end-to-end test since no host is set")
 	}
 	ctx := context.Background()
 
