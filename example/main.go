@@ -15,12 +15,12 @@ func main() {
 	// Optionally set Basic Auth
 	client.SetBasicAuth("user", "password")
 
+	// Make error checking more convenient.
+	client.PromoteErrors(true)
+
 	// Create a table.
 	resp, err := client.ExecuteSingle(context.Background(), "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 	if err != nil {
-		panic(err)
-	}
-	if f, _, err := resp.HasError(); f {
 		panic(err)
 	}
 
@@ -29,10 +29,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if f, _, err := resp.HasError(); f {
-		panic(err)
-	}
-
 	// Insert a second record with full control.
 	resp, err = client.Execute(
 		context.Background(),
@@ -49,17 +45,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	if f, _, err := resp.HasError(); f {
-		panic(err)
-	}
 	fmt.Printf("ExecuteResponse: %s\n", jsonMarshal(resp))
 
 	// Query the newly created table
 	qResp, err := client.QuerySingle(context.Background(), "SELECT * FROM foo")
 	if err != nil {
-		panic(err)
-	}
-	if f, _, err := resp.HasError(); f {
 		panic(err)
 	}
 	fmt.Printf("QueryResponse: %s\n", jsonMarshal(qResp))
