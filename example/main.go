@@ -10,7 +10,10 @@ import (
 
 func main() {
 	// Create a client pointing to a rqlite node
-	client := rqlitehttp.NewClient("http://localhost:4001", nil)
+	client, err := rqlitehttp.NewClient("http://localhost:4001", nil)
+	if err != nil {
+		panic(err)
+	}
 
 	// Optionally set Basic Auth
 	client.SetBasicAuth("user", "password")

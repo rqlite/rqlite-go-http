@@ -14,7 +14,10 @@ func Test_EndToEnd(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	client := NewClient(fmt.Sprintf("http://%s:4001", host), nil)
+	client, err := NewClient(fmt.Sprintf("http://%s:4001", host), nil)
+	if err != nil {
+		t.Fatalf("Error creating client: %s", err)
+	}
 	if _, err := client.ExecuteSingle(ctx, "CREATE TABLE foo (id INT, name TEXT)"); err != nil {
 		t.Fatalf("Error creating table: %s", err)
 	}
