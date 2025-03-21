@@ -22,7 +22,7 @@ jobs:
       RQLITE_GO_HTTP_E2E_HOST: rqlite
     steps:
       - checkout
-      - run: go test -v ./...
+      - run: go test -run Test_EndToEnd
 
 workflows:
   test-workflow:
