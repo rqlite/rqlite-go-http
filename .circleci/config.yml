@@ -4,19 +4,28 @@ jobs:
   test:
     docker:
       - image: cimg/go:1.24.0
-      - image: rqlite/rqlite:latest
-        name: rqlite
 
     steps:
-      # Checkout the code as the first step.
       - checkout
       - run: go version
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
-      - run: go test -v ./... -args -host=rqlite
-      - run: go test -v -race ./... -args -host=rqlite
+      - run: go test -v ./...
+      - run: go test -v -race ./...
+  end-to-end:
+    docker:
+      - image: cimg/go:1.24.0
+      - image: rqlite/rqlite:latest
+        name: rqlite
+
+    environment:
+      RQLITE_GO_HTTP_E2E_HOST: rqlite
+    steps:
+      - checkout
+      - run: go test -v ./...
 
 workflows:
   test-workflow:
     jobs:
       - test
+      - end-to-end
