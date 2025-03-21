@@ -549,7 +549,7 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error 
 }
 
 // Boot streams a raw SQLite file into a single-node system, effectively initializing
-// the underlying SQLite store from scratch. This is done via a POST to /boot.
+// the underlying SQLite database from scratch. This is done via a POST to /boot.
 func (c *Client) Boot(ctx context.Context, r io.Reader) error {
 	_, err := c.doOctetStreamPostRequest(ctx, c.bootURL, nil, r)
 	return err
