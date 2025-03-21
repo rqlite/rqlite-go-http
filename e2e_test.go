@@ -2,14 +2,30 @@ package http
 
 import (
 	"context"
+	"flag"
+	"fmt"
+	"os"
 	"testing"
 )
 
+var host string
+
+func init() {
+	flag.StringVar(&host, "host", "localhost", "Host to connect to")
+}
+
+func TestMain(m *testing.M) {
+	flag.Parse()
+	os.Exit(m.Run())
+}
+
 func Test_EndToEnd(t *testing.T) {
-	t.Skip()
+	if _, ok := os.LookupEnv("CIRCLECI"); !ok {
+		t.Skip("Skipping end-to-end test")
+	}
 	ctx := context.Background()
 
-	client := NewClient("http://localhost:4001", nil)
+	client := NewClient(fmt.Sprintf("http://%s:4001", host), nil)
 	if _, err := client.ExecuteSingle(ctx, "CREATE TABLE foo (id INT, name TEXT)"); err != nil {
 		t.Fatalf("Error creating table: %s", err)
 	}
