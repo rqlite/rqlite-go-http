@@ -555,6 +555,7 @@ func (c *Client) Boot(ctx context.Context, r io.Reader) error {
 	return err
 }
 
+// RemoveNode removes a node from the cluster. The node is identified by its ID.
 func (c *Client) RemoveNode(ctx context.Context, id string) error {
 	body := fmt.Sprintf(`{"id":"%s"}`, id)
 	_, err := c.doRequest(ctx, "DELETE", c.removeURL, "application/json", nil, bytes.NewReader([]byte(body)))
