@@ -460,9 +460,10 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	return &queryResponse, retErr
 }
 
-// RequestSingle sends a single statement using /db/request. args should be a single map
-// of named parameters, or a slice of positional parameters.
-// It is the caller's responsibility to ensure the correct number and type of parameters.
+// RequestSingle sends a single statement, which can be either a read or write.
+// args should be a single map of named parameters, or a slice of positional
+// parameters. It is the caller's responsibility to ensure the correct number and
+// type of parameters.
 func (c *Client) RequestSingle(ctx context.Context, statement string, args ...any) (*RequestResponse, error) {
 	stmt, err := NewSQLStatement(statement, args...)
 	if err != nil {
@@ -472,7 +473,6 @@ func (c *Client) RequestSingle(ctx context.Context, statement string, args ...an
 }
 
 // Request sends both read and write statements in a single request using /db/request.
-// This method determines read vs. write by inspecting the statements.
 func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (rr *RequestResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
