@@ -330,7 +330,7 @@ type Client struct {
 // NewClient creates a new Client with default settings. If httpClient is nil,
 // the the default client is used.
 func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
-	lb, err := NewLoopbackBalancer([]string{baseURL})
+	lb, err := NewLoopbackBalancer(baseURL)
 	if err != nil {
 		return nil, err
 	}

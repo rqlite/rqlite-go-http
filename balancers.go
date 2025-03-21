@@ -18,12 +18,8 @@ type LoopbackBalancer struct {
 }
 
 // NewLoopbackBalancer returns a new LoopbackBalancer.
-func NewLoopbackBalancer(addresses []string) (*LoopbackBalancer, error) {
-	if len(addresses) != 1 {
-		return nil, errors.New("must provide a single address")
-	}
-
-	u, err := url.Parse(addresses[0])
+func NewLoopbackBalancer(address string) (*LoopbackBalancer, error) {
+	u, err := url.Parse(address)
 	if err != nil {
 		return nil, err
 	}
