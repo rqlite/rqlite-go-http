@@ -559,8 +559,20 @@ func (c *Client) Boot(ctx context.Context, r io.Reader) error {
 // RemoveNode removes a node from the cluster. The node is identified by its ID.
 func (c *Client) RemoveNode(ctx context.Context, id string) error {
 	body := fmt.Sprintf(`{"id":"%s"}`, id)
-	_, err := c.doRequest(ctx, "DELETE", removePath, "application/json", nil, bytes.NewReader([]byte(body)))
-	return err
+	resp, err := c.doRequest(ctx, "DELETE", removePath, "application/json", nil, bytes.NewReader([]byte(body)))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, respBody)
+	}
+	return nil
 }
 
 // Status returns the status of the node.
@@ -573,6 +585,9 @@ func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
 	return json.RawMessage(b), nil
 }
@@ -588,6 +603,9 @@ func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
+	}
 	return json.RawMessage(b), nil
 }
 
@@ -602,6 +620,9 @@ func (c *Client) Nodes(ctx context.Context) (json.RawMessage, error) {
 	if err != nil {
 		return nil, err
 	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
+	}
 	return json.RawMessage(b), nil
 }
 
@@ -611,6 +632,14 @@ func (c *Client) Ready(ctx context.Context) (io.ReadCloser, error) {
 	resp, err := c.doGetRequest(ctx, readyPath, nil)
 	if err != nil {
 		return nil, err
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
 	return resp.Body, nil
 }
