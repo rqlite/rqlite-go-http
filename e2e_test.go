@@ -61,4 +61,24 @@ func Test_EndToEnd(t *testing.T) {
 	if v != 10 {
 		t.Fatalf("Unexpected value")
 	}
+
+	reqResp, err := client.Request(ctx, NewSQLStatementsFromStrings([]string{
+		`INSERT INTO foo(name) VALUES("fiona")`, `SELECT COUNT(*) FROM foo`}), nil)
+	if err != nil {
+		t.Fatalf("Error counting records: %s", err)
+	}
+	reqResults := reqResp.GetRequestResults()
+	if len(reqResults) != 2 {
+		t.Fatalf("Unexpected number of results")
+	}
+	if len(reqResults[1].Values) != 1 {
+		t.Fatalf("Unexpected number of rows")
+	}
+	v, ok = reqResults[1].Values[0][0].(float64)
+	if !ok {
+		t.Fatalf("Unexpected value type: %T", reqResults[0].Values[0][0])
+	}
+	if v != 11 {
+		t.Fatalf("Unexpected value")
+	}
 }
