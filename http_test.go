@@ -14,7 +14,10 @@ import (
 )
 
 func Test_NewClient(t *testing.T) {
-	client := NewClient("http://localhost:4001", nil)
+	client, err := NewClient("http://localhost:4001", nil)
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
 	if client == nil {
 		t.Error("Expected client to be non-nil")
 	}
@@ -55,7 +58,11 @@ func Test_BasicAuth(t *testing.T) {
 		w.Write([]byte("{}"))
 	}))
 
-	client := NewClient(ts.URL, nil)
+	client, err := NewClient(ts.URL, nil)
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
+	defer client.Close()
 	if _, err := client.Status(context.Background()); err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
@@ -156,7 +163,10 @@ func Test_Execute(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := NewClient(ts.URL, nil)
+			client, err := NewClient(ts.URL, nil)
+			if err != nil {
+				t.Fatalf("Expected nil error, got %v", err)
+			}
 			defer client.Close()
 			gotER, err := client.Execute(context.Background(), tt.statements, tt.opts)
 			if err != nil {
@@ -246,7 +256,10 @@ func Test_Query(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := NewClient(ts.URL, nil)
+			client, err := NewClient(ts.URL, nil)
+			if err != nil {
+				t.Fatalf("Expected nil error, got %v", err)
+			}
 			defer client.Close()
 			gotQR, err := client.Query(context.Background(), tt.statements, &tt.opts)
 			if err != nil {
@@ -337,7 +350,10 @@ func Test_QueryAssoc(t *testing.T) {
 			}))
 			defer ts.Close()
 
-			client := NewClient(ts.URL, nil)
+			client, err := NewClient(ts.URL, nil)
+			if err != nil {
+				t.Fatalf("Expected nil error, got %v", err)
+			}
 			defer client.Close()
 			tt.opts.Associative = true
 			gotQR, err := client.Query(context.Background(), tt.statements, &tt.opts)
@@ -423,7 +439,10 @@ func Test_Request(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	resp, err := cl.Request(context.Background(), statements, &opts)
 	if err != nil {
 		t.Fatalf("unexpected error from Request: %v", err)
@@ -534,7 +553,10 @@ func Test_RequestAssoc(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	resp, err := cl.Request(context.Background(), statements, &opts)
 	if err != nil {
 		t.Fatalf("unexpected error from Request: %v", err)
@@ -581,10 +603,13 @@ func Test_PromoteErrors(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	client := NewClient(ts.URL, nil)
+	client, err := NewClient(ts.URL, nil)
+	if err != nil {
+		t.Fatalf("Expected nil error, got %v", err)
+	}
 	defer client.Close()
 
-	_, err := client.Execute(context.Background(), nil, nil)
+	_, err = client.Execute(context.Background(), nil, nil)
 	if err != nil {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
@@ -637,9 +662,12 @@ func Test_Boot(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	dataReader := bytes.NewReader(expectedData)
-	err := cl.Boot(context.Background(), dataReader)
+	err = cl.Boot(context.Background(), dataReader)
 	if err != nil {
 		t.Fatalf("unexpected error calling Boot: %v", err)
 	}
@@ -659,7 +687,10 @@ func Test_Backup(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	rc, err := cl.Backup(context.Background(), BackupOptions{})
 	if err != nil {
 		t.Fatalf("unexpected error calling Backup: %v", err)
@@ -690,7 +721,10 @@ func Test_Status(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	rawMsg, err := cl.Status(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error calling Status: %v", err)
@@ -715,7 +749,10 @@ func Test_Expvar(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	rawMsg, err := cl.Expvar(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error calling Expvar: %v", err)
@@ -740,7 +777,10 @@ func Test_Nodes(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	rawMsg, err := cl.Nodes(context.Background())
 	if err != nil {
 		t.Fatalf("unexpected error calling Nodes: %v", err)
@@ -770,7 +810,10 @@ func Test_RemoveNode(t *testing.T) {
 	}))
 	defer server.Close()
 
-	cl := NewClient(server.URL, nil)
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
 	if err := cl.RemoveNode(context.Background(), "id1"); err != nil {
 		t.Fatalf("unexpected error calling RemoveNode: %v", err)
 	}

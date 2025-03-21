@@ -316,7 +316,7 @@ const (
 
 // Client is the main type through which rqlite is accessed.
 type Client struct {
-	baseURL       string
+	baseURL       *url.URL
 	httpClient    *http.Client
 	basicAuthUser string
 	basicAuthPass string
@@ -325,15 +325,20 @@ type Client struct {
 
 // NewClient creates a new Client with default settings. If httpClient is nil,
 // the the default client is used.
-func NewClient(baseURL string, httpClient *http.Client) *Client {
+func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
+	// parse baseURL to ensure it is valid
+	bu, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, err
+	}
 	cl := &Client{
-		baseURL:    baseURL,
+		baseURL:    bu,
 		httpClient: httpClient,
 	}
 	if cl.httpClient == nil {
 		cl.httpClient = DefaultHTTPClient()
 	}
-	return cl
+	return cl, nil
 }
 
 // SetBasicAuth configures the client to use Basic Auth for all subsequent requests.
@@ -610,29 +615,32 @@ func (c *Client) Close() error {
 	return nil
 }
 
-func (c *Client) doGetRequest(ctx context.Context, url string, values url.Values) (*http.Response, error) {
-	return c.doRequest(ctx, "GET", url, "", values, nil)
+func (c *Client) doGetRequest(ctx context.Context, path string, values url.Values) (*http.Response, error) {
+	return c.doRequest(ctx, "GET", path, "", values, nil)
 }
 
-func (c *Client) doJSONPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
-	return c.doRequest(ctx, "POST", url, "application/json", values, body)
+func (c *Client) doJSONPostRequest(ctx context.Context, path string, values url.Values, body io.Reader) (*http.Response, error) {
+	return c.doRequest(ctx, "POST", path, "application/json", values, body)
 }
 
-func (c *Client) doOctetStreamPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
-	return c.doRequest(ctx, "POST", url, "application/octet-stream", values, body)
+func (c *Client) doOctetStreamPostRequest(ctx context.Context, path string, values url.Values, body io.Reader) (*http.Response, error) {
+	return c.doRequest(ctx, "POST", path, "application/octet-stream", values, body)
 }
 
-func (c *Client) doPlainPostRequest(ctx context.Context, url string, values url.Values, body io.Reader) (*http.Response, error) {
-	return c.doRequest(ctx, "POST", url, "text/plain", values, body)
+func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url.Values, body io.Reader) (*http.Response, error) {
+	return c.doRequest(ctx, "POST", path, "text/plain", values, body)
 }
 
 // doRequest builds and executes an HTTP request, returning the response.
-func (c *Client) doRequest(ctx context.Context, method, url string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
-	fullURL := c.baseURL + url
-	if values != nil {
-		fullURL += "?" + values.Encode()
+func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
+	fullURL := c.baseURL.JoinPath(path)
+	currValues := fullURL.Query()
+	for k, v := range values {
+		currValues[k] = v
 	}
-	req, err := http.NewRequestWithContext(ctx, method, fullURL, body)
+	fullURL.RawQuery = currValues.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
