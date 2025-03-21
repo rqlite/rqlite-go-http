@@ -13,8 +13,8 @@ jobs:
       - run: go version
       - run: test -z "$(gofmt -l . | tee /dev/stderr)"
       - run: go vet ./...
-      - run: go test -v ./...
-      - run: go test -v -race ./...
+      - run: go test -v ./... -args -host=rqlite
+      - run: go test -v -race ./... -args -host=rqlite
 
 workflows:
   test-workflow:
