@@ -3,7 +3,7 @@ version: 2.1
 jobs:
   test:
     docker:
-      - image: cimg/go:1.22.0
+      - image: cimg/go:1.24.0
 
     steps:
       # Checkout the code as the first step.
