@@ -47,10 +47,7 @@ func Test_EndToEnd(t *testing.T) {
 		t.Fatalf("Error counting records: %s", err)
 	}
 
-	results, ok := resp.Results.([]QueryResult)
-	if !ok {
-		t.Fatalf("Unexpected result type")
-	}
+	results := resp.GetQueryResults()
 	if len(results) != 1 {
 		t.Fatalf("Unexpected number of results")
 	}
