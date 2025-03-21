@@ -5,6 +5,7 @@ jobs:
     docker:
       - image: cimg/go:1.24.0
       - image: rqlite/rqlite:latest
+        name: rqlite
 
     steps:
       # Checkout the code as the first step.
@@ -14,6 +15,7 @@ jobs:
       - run: go vet ./...
       - run: go test -v ./...
       - run: go test -v -race ./...
+      - run: curl -s http://rqlite:4001/status
 
 workflows:
   test-workflow:
