@@ -314,7 +314,9 @@ const (
 	removePath  = "/remove"
 )
 
+// LoadBalancer is the interface load balancers must support.
 type LoadBalancer interface {
+	// Next returns the next URL to use for the request.
 	Next() (*url.URL, error)
 }
 
