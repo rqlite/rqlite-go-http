@@ -314,9 +314,13 @@ const (
 	removePath  = "/remove"
 )
 
+type LoadBalancer interface {
+	Next() (*url.URL, error)
+}
+
 // Client is the main type through which rqlite is accessed.
 type Client struct {
-	baseURL       *url.URL
+	lb            LoadBalancer
 	httpClient    *http.Client
 	basicAuthUser string
 	basicAuthPass string
@@ -326,13 +330,13 @@ type Client struct {
 // NewClient creates a new Client with default settings. If httpClient is nil,
 // the the default client is used.
 func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
-	// parse baseURL to ensure it is valid
-	bu, err := url.Parse(baseURL)
+	lb, err := NewLoopbackBalancer([]string{baseURL})
 	if err != nil {
 		return nil, err
 	}
+
 	cl := &Client{
-		baseURL:    bu,
+		lb:         lb,
 		httpClient: httpClient,
 	}
 	if cl.httpClient == nil {
@@ -633,7 +637,11 @@ func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url
 
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
-	fullURL := c.baseURL.JoinPath(path)
+	bu, err := c.lb.Next()
+	if err != nil {
+		return nil, err
+	}
+	fullURL := bu.JoinPath(path)
 	currValues := fullURL.Query()
 	for k, v := range values {
 		currValues[k] = v
