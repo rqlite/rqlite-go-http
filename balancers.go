@@ -9,8 +9,11 @@ import (
 )
 
 var (
+	// ErrNoHostsAvailable is returned when no hosts are available.
 	ErrNoHostsAvailable = errors.New("no hosts available")
 
+	// ErrDuplicateAddresses is returned when duplicate addresses are provided
+	// to a balancer.
 	ErrDuplicateAddresses = errors.New("duplicate addresses provided")
 )
 
@@ -126,6 +129,32 @@ func (rb *RandomBalancer) MarkBad(u *url.URL) {
 			return
 		}
 	}
+}
+
+// Healthy returns the slice of currently healthy hosts.
+func (rb *RandomBalancer) Healthy() []*url.URL {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+	var healthy []*url.URL
+	for _, host := range rb.hosts {
+		if host.Healthy {
+			healthy = append(healthy, host.URL)
+		}
+	}
+	return healthy
+}
+
+// Bad returns the slice of currently bad hosts.
+func (rb *RandomBalancer) Bad() []*url.URL {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+	var bad []*url.URL
+	for _, host := range rb.hosts {
+		if !host.Healthy {
+			bad = append(bad, host.URL)
+		}
+	}
+	return bad
 }
 
 // Close closes the RandomBalancer. A closed RandomBalancer should not be reused.
