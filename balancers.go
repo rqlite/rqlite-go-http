@@ -48,7 +48,11 @@ type Host struct {
 type HostChecker func(url *url.URL) bool
 
 // RandomBalancer takes a list of addresses and returns a random one from its
-// // healthy list when Next() is called.
+// healthy list when Next() is called. At the start all supplied addresses are
+// considered healthy. If a client detects that an address is unhealthy, it can
+// call MarkBad() to mark the address as unhealthy. The RandomBalancer will
+// then periodically check the health of the address and mark it as healthy
+// again if and when it becomes healthy.
 type RandomBalancer struct {
 	mu    sync.RWMutex
 	hosts []*Host
@@ -56,7 +60,9 @@ type RandomBalancer struct {
 	chkInterval time.Duration
 	chckFn      HostChecker
 	ch          chan *url.URL
-	done        chan struct{}
+
+	wg   sync.WaitGroup
+	done chan struct{}
 }
 
 // NewRandomBalancer returns a new RandomBalancer.
@@ -82,6 +88,8 @@ func NewRandomBalancer(addresses []string, chckFn HostChecker, d time.Duration) 
 		chkInterval: d,
 		chckFn:      chckFn,
 	}
+
+	rb.wg.Add(2)
 	go rb.checkBadHosts()
 	go rb.markGoodHosts()
 	return rb, nil
@@ -120,12 +128,14 @@ func (rb *RandomBalancer) MarkBad(u *url.URL) {
 	}
 }
 
-// Close closes the RandomBalancer.
+// Close closes the RandomBalancer. A closed RandomBalancer should not be reused.
 func (rb *RandomBalancer) Close() {
 	close(rb.done)
+	rb.wg.Wait()
 }
 
 func (rb *RandomBalancer) checkBadHosts() {
+	defer rb.wg.Done()
 	ticker := time.NewTicker(rb.chkInterval)
 	for {
 		select {
@@ -146,6 +156,7 @@ func (rb *RandomBalancer) checkBadHosts() {
 }
 
 func (rb *RandomBalancer) markGoodHosts() {
+	defer rb.wg.Done()
 	for {
 		select {
 		case u := <-rb.ch:
