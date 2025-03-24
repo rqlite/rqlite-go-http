@@ -2,7 +2,10 @@ package http
 
 import (
 	"errors"
+	"math/rand/v2"
 	"net/url"
+	"sync"
+	"time"
 )
 
 var (
@@ -30,6 +33,130 @@ func NewLoopbackBalancer(address string) (*LoopbackBalancer, error) {
 }
 
 // Next returns the next address in the list of addresses.
-func (rb *LoopbackBalancer) Next() (*url.URL, error) {
-	return rb.u, nil
+func (lb *LoopbackBalancer) Next() (*url.URL, error) {
+	return lb.u, nil
+}
+
+// Host represents a URL and its health status.
+type Host struct {
+	URL     *url.URL
+	Healthy bool
+}
+
+// HostChecker is a function that takes a URL and returns true if the URL is
+// healthy.
+type HostChecker func(url *url.URL) bool
+
+// RandomBalancer takes a list of addresses and returns a random one from its
+// // healthy list when Next() is called.
+type RandomBalancer struct {
+	mu    sync.RWMutex
+	hosts []*Host
+
+	chkInterval time.Duration
+	chckFn      HostChecker
+	ch          chan *url.URL
+	done        chan struct{}
+}
+
+// NewRandomBalancer returns a new RandomBalancer.
+func NewRandomBalancer(addresses []string, chckFn HostChecker, d time.Duration) (*RandomBalancer, error) {
+	hosts := make([]*Host, 0, len(addresses))
+	seen := make(map[string]struct{})
+	for _, s := range addresses {
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := seen[u.String()]; ok {
+			return nil, ErrDuplicateAddresses
+		}
+		seen[u.String()] = struct{}{}
+		hosts = append(hosts, &Host{URL: u, Healthy: true})
+	}
+	if len(hosts) == 0 {
+		return nil, ErrNoHostsAvailable
+	}
+	rb := &RandomBalancer{
+		hosts:       hosts,
+		chkInterval: d,
+		chckFn:      chckFn,
+	}
+	go rb.checkBadHosts()
+	go rb.markGoodHosts()
+	return rb, nil
+}
+
+// Next returns a random address from the list of addresses it currently
+// considers healthy.
+func (rb *RandomBalancer) Next() (*url.URL, error) {
+	rb.mu.RLock()
+	defer rb.mu.RUnlock()
+	var healthy []*Host
+	for _, host := range rb.hosts {
+		if host.Healthy {
+			healthy = append(healthy, host)
+		}
+	}
+
+	if len(healthy) == 0 {
+		return nil, ErrNoHostsAvailable
+	}
+	idx := rand.IntN(len(healthy))
+	return healthy[idx].URL, nil
+}
+
+// MarkBad marks an address returned by Next() as bad. The RandomBalancer
+// will not return this address until the RandomBalancer considers it healthy
+// again.
+func (rb *RandomBalancer) MarkBad(u *url.URL) {
+	rb.mu.Lock()
+	defer rb.mu.Unlock()
+	for _, host := range rb.hosts {
+		if host.URL.String() == u.String() {
+			host.Healthy = false
+			return
+		}
+	}
+}
+
+// Close closes the RandomBalancer.
+func (rb *RandomBalancer) Close() {
+	close(rb.done)
+}
+
+func (rb *RandomBalancer) checkBadHosts() {
+	ticker := time.NewTicker(rb.chkInterval)
+	for {
+		select {
+		case <-ticker.C:
+			rb.mu.RLock()
+			for _, host := range rb.hosts {
+				if !host.Healthy {
+					if ok := rb.chckFn(host.URL); ok {
+						rb.ch <- host.URL
+					}
+				}
+			}
+			rb.mu.RUnlock()
+		case <-rb.done:
+			return
+		}
+	}
+}
+
+func (rb *RandomBalancer) markGoodHosts() {
+	for {
+		select {
+		case u := <-rb.ch:
+			rb.mu.Lock()
+			for _, host := range rb.hosts {
+				if host.URL == u {
+					host.Healthy = true
+					break
+				}
+			}
+			rb.mu.Unlock()
+		}
+	}
 }
