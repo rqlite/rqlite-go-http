@@ -667,11 +667,11 @@ func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url
 
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
-	bu, err := c.lb.Next()
+	baseURL, err := c.lb.Next()
 	if err != nil {
 		return nil, err
 	}
-	fullURL := bu.JoinPath(path)
+	fullURL := baseURL.JoinPath(path)
 	currValues := fullURL.Query()
 	for k, v := range values {
 		currValues[k] = v
