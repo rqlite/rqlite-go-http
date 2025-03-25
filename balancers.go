@@ -58,7 +58,7 @@ type HostChecker func(url *url.URL) bool
 // again if and when it becomes healthy.
 type RandomBalancer struct {
 	mu    sync.RWMutex
-	hosts []*Host
+	hosts map[string]*Host
 
 	chkInterval time.Duration
 	chckFn      HostChecker
@@ -69,19 +69,17 @@ type RandomBalancer struct {
 }
 
 // NewRandomBalancer returns a new RandomBalancer.
-func NewRandomBalancer(addresses []string, chckFn HostChecker, d time.Duration) (*RandomBalancer, error) {
-	hosts := make([]*Host, 0, len(addresses))
-	seen := make(map[string]struct{})
-	for _, s := range addresses {
+func NewRandomBalancer(urls []string, chckFn HostChecker, d time.Duration) (*RandomBalancer, error) {
+	hosts := make(map[string]*Host)
+	for _, s := range urls {
 		u, err := url.Parse(s)
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := seen[u.String()]; ok {
+		if _, ok := hosts[u.String()]; ok {
 			return nil, ErrDuplicateAddresses
 		}
-		seen[u.String()] = struct{}{}
-		hosts = append(hosts, &Host{URL: u, Healthy: true})
+		hosts[u.String()] = &Host{URL: u, Healthy: true}
 	}
 	if len(hosts) == 0 {
 		return nil, ErrNoHostsAvailable
@@ -90,6 +88,8 @@ func NewRandomBalancer(addresses []string, chckFn HostChecker, d time.Duration) 
 		hosts:       hosts,
 		chkInterval: d,
 		chckFn:      chckFn,
+		ch:          make(chan *url.URL, len(hosts)),
+		done:        make(chan struct{}),
 	}
 
 	rb.wg.Add(2)
@@ -101,20 +101,12 @@ func NewRandomBalancer(addresses []string, chckFn HostChecker, d time.Duration) 
 // Next returns a random address from the list of addresses it currently
 // considers healthy.
 func (rb *RandomBalancer) Next() (*url.URL, error) {
-	rb.mu.RLock()
-	defer rb.mu.RUnlock()
-	var healthy []*Host
-	for _, host := range rb.hosts {
-		if host.Healthy {
-			healthy = append(healthy, host)
-		}
-	}
-
+	healthy := rb.Healthy()
 	if len(healthy) == 0 {
 		return nil, ErrNoHostsAvailable
 	}
 	idx := rand.IntN(len(healthy))
-	return healthy[idx].URL, nil
+	return healthy[idx], nil
 }
 
 // MarkBad marks an address returned by Next() as bad. The RandomBalancer
@@ -123,12 +115,7 @@ func (rb *RandomBalancer) Next() (*url.URL, error) {
 func (rb *RandomBalancer) MarkBad(u *url.URL) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
-	for _, host := range rb.hosts {
-		if host.URL.String() == u.String() {
-			host.Healthy = false
-			return
-		}
-	}
+	rb.hosts[u.String()].Healthy = false
 }
 
 // Healthy returns the slice of currently healthy hosts.
@@ -197,6 +184,8 @@ func (rb *RandomBalancer) markGoodHosts() {
 				}
 			}
 			rb.mu.Unlock()
+		case <-rb.done:
+			return
 		}
 	}
 }
