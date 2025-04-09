@@ -628,7 +628,7 @@ func (c *Client) Nodes(ctx context.Context) (json.RawMessage, error) {
 
 // Ready returns the readiness of the node. The caller must close the returned ReadCloser
 // when done, regardless of any error.
-func (c *Client) Ready(ctx context.Context) (io.ReadCloser, error) {
+func (c *Client) Ready(ctx context.Context) (json.RawMessage, error) {
 	resp, err := c.doGetRequest(ctx, readyPath, nil)
 	if err != nil {
 		return nil, err
@@ -641,7 +641,7 @@ func (c *Client) Ready(ctx context.Context) (io.ReadCloser, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return resp.Body, nil
+	return json.RawMessage(b), nil
 }
 
 // Close closes the client and should be called when the client is no longer needed.
