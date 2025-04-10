@@ -643,6 +643,20 @@ func (c *Client) Ready(ctx context.Context) ([]byte, error) {
 	return b, err
 }
 
+// Version returns the version of software running on the node.
+func (c *Client) Version(ctx context.Context) (string, error) {
+	resp, err := c.doGetRequest(ctx, statusPath, nil)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	version := resp.Header.Get("X-RQLITE-VERSION")
+	if version == "" {
+		version = "unknown"
+	}
+	return version, nil
+}
+
 // Close closes the client and should be called when the client is no longer needed.
 func (c *Client) Close() error {
 	return nil

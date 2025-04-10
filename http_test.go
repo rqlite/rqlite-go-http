@@ -819,6 +819,27 @@ func Test_RemoveNode(t *testing.T) {
 	}
 }
 
+func Test_Version(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("X-RQLITE-VERSION", "1.2.3")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
+	v, err := cl.Version(context.Background())
+	if err != nil {
+		t.Fatalf("unexpected error retrieving status: %v", err)
+	}
+
+	if exp, got := "1.2.3", v; exp != got {
+		t.Fatalf("wrong version, exp: %s, got: %s", exp, got)
+	}
+}
+
 func mustUnmarshalQueryResponse(s string) QueryResponse {
 	var qr QueryResponse
 	if err := json.Unmarshal([]byte(s), &qr); err != nil {
