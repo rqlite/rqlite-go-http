@@ -514,10 +514,15 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	return &reqResp, retErr
 }
 
-// Backup requests a copy of the SQLite database from the node. The caller must close the
-// returned ReadCloser when done, regardless of any error. opts may be nil, in which case
-// default options are used.
-func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (io.ReadCloser, error) {
+// Backup requests a copy of the SQLite database from the node. opts may be nil, in which case
+// default options are used. The caller is responsible for closing the returned io.ReadCloser
+// when done with it.
+func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (rc io.ReadCloser, retError error) {
+	defer func() {
+		if retError != nil && rc != nil {
+			rc.Close()
+		}
+	}()
 	reqParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
