@@ -562,7 +562,8 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts *LoadOptions) error
 }
 
 // Boot streams a raw SQLite file into a single-node system, effectively initializing
-// the underlying SQLite database from scratch. This is done via a POST to /boot.
+// the underlying SQLite database from scratch. It is an error to call this on anything
+// but a single-node system.
 func (c *Client) Boot(ctx context.Context, r io.Reader) error {
 	_, err := c.doOctetStreamPostRequest(ctx, bootPath, nil, r)
 	return err
@@ -604,7 +605,7 @@ func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 	return json.RawMessage(b), nil
 }
 
-// Expvar returns the expvar data from the node.
+// Expvar returns the Go expvar data from the node.
 func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
 	resp, err := c.doGetRequest(ctx, expvarPath, nil)
 	if err != nil {
