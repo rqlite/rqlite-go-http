@@ -140,6 +140,15 @@ type NodeOptions struct {
 	Version   string        `uvalue:"ver,omitempty"`
 }
 
+// ReadyOptions holds optional settings for /readyz requests.
+type ReadyOptions struct {
+	// Sync instructions the node to until it is "caught up" with the Leader.
+	Sync bool `uvalue:"sync,omitempty"`
+
+	// Timeout is the maximum time to wait for the node to be ready.
+	Timeout time.Duration `uvalue:"timeout,omitempty"`
+}
+
 // makeURLValues converts a struct to a url.Values, using the `uvalue` tag to
 // determine the key name.
 func makeURLValues(input any) (url.Values, error) {

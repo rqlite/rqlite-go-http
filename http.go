@@ -639,8 +639,12 @@ func (c *Client) Nodes(ctx context.Context, opts *NodeOptions) (json.RawMessage,
 }
 
 // Ready returns the readiness of the node.
-func (c *Client) Ready(ctx context.Context) ([]byte, error) {
-	resp, err := c.doGetRequest(ctx, readyPath, nil)
+func (c *Client) Ready(ctx context.Context, opts *ReadyOptions) ([]byte, error) {
+	params, err := makeURLValues(opts)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.doGetRequest(ctx, readyPath, params)
 	if err != nil {
 		return nil, err
 	}

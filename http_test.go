@@ -844,6 +844,36 @@ func Test_Version(t *testing.T) {
 	}
 }
 
+func Test_Ready(t *testing.T) {
+	expectedData := []byte(`[+]node ok`)
+	expectedRawQuery := "sync=true"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/readyz" {
+			t.Errorf("expected path /readyz, got %s", r.URL.Path)
+		}
+		if r.URL.RawQuery != expectedRawQuery {
+			t.Errorf("expected query %s, got %s", expectedRawQuery, r.URL.RawQuery)
+		}
+		if _, err := w.Write(expectedData); err != nil {
+			t.Fatalf("failed to write response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
+	v, err := cl.Ready(context.Background(), &ReadyOptions{Sync: true})
+	if err != nil {
+		t.Fatalf("unexpected error retrieving status: %v", err)
+	}
+	if string(v) != string(expectedData) {
+		t.Fatalf("mismatched Ready response.\nwant: %q\ngot:  %q", expectedData, v)
+	}
+}
+
 func mustUnmarshalQueryResponse(s string) QueryResponse {
 	var qr QueryResponse
 	if err := json.Unmarshal([]byte(s), &qr); err != nil {
