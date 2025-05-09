@@ -378,6 +378,7 @@ func (c *Client) ExecuteSingle(ctx context.Context, statement string, args ...an
 }
 
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
+// opts may be nil, in which case default options are used.
 func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (retEr *ExecuteResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
@@ -427,7 +428,8 @@ func (c *Client) QuerySingle(ctx context.Context, statement string, args ...any)
 	return c.Query(ctx, SQLStatements{stmt}, nil)
 }
 
-// Query performs a read operation (SELECT) using /db/query.
+// Query performs a read operation (SELECT) using /db/query. opts may be nil, in which case default
+// options are used.
 func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *QueryOptions) (retQr *QueryResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
@@ -476,6 +478,7 @@ func (c *Client) RequestSingle(ctx context.Context, statement string, args ...an
 }
 
 // Request sends both read and write statements in a single request using /db/request.
+// opts may be nil, in which case default options are used.
 func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (rr *RequestResponse, retErr error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
@@ -512,7 +515,8 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 }
 
 // Backup requests a copy of the SQLite database from the node. The caller must close the
-// returned ReadCloser when done, regardless of any error.
+// returned ReadCloser when done, regardless of any error. opts may be nil, in which case
+// default options are used.
 func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (io.ReadCloser, error) {
 	reqParams, err := makeURLValues(opts)
 	if err != nil {
