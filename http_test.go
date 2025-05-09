@@ -765,10 +765,14 @@ func Test_Expvar(t *testing.T) {
 
 func Test_Nodes(t *testing.T) {
 	expectedData := []byte(`[{"api_addr":"localhost:4001","reachable":true}]`)
+	expectedRawQuery := "nonvoters=true"
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/nodes" {
 			t.Errorf("expected path /nodes, got %s", r.URL.Path)
+		}
+		if r.URL.RawQuery != expectedRawQuery {
+			t.Errorf("expected query %s, got %s", expectedRawQuery, r.URL.RawQuery)
 		}
 		w.WriteHeader(http.StatusOK)
 		if _, err := w.Write(expectedData); err != nil {
@@ -781,7 +785,7 @@ func Test_Nodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error from NewClient: %v", err)
 	}
-	rawMsg, err := cl.Nodes(context.Background())
+	rawMsg, err := cl.Nodes(context.Background(), &NodeOptions{NonVoters: true})
 	if err != nil {
 		t.Fatalf("unexpected error calling Nodes: %v", err)
 	}

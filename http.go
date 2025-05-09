@@ -610,8 +610,14 @@ func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
 }
 
 // Nodes returns the list of known nodes in the cluster.
-func (c *Client) Nodes(ctx context.Context) (json.RawMessage, error) {
-	resp, err := c.doGetRequest(ctx, nodesPath, nil)
+func (c *Client) Nodes(ctx context.Context, opts *NodeOptions) (json.RawMessage, error) {
+	params, err := makeURLValues(opts)
+	if err != nil {
+		return nil, err
+	}
+	_ = params
+
+	resp, err := c.doGetRequest(ctx, nodesPath, params)
 	if err != nil {
 		return nil, err
 	}

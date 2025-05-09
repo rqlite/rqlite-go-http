@@ -136,7 +136,7 @@ type RequestOptions struct {
 type NodeOptions struct {
 	Timeout   time.Duration `uvalue:"timeout,omitempty"`
 	Pretty    bool          `uvalue:"pretty,omitempty"`
-	NonVoters bool          `uvalue:"non_voters,omitempty"`
+	NonVoters bool          `uvalue:"nonvoters,omitempty"`
 	Version   string        `uvalue:"ver,omitempty"`
 }
 
