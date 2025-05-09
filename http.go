@@ -535,12 +535,12 @@ func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (io.ReadCloser
 
 // Load streams data from r into the node, to load or restore data. Load automatically
 // detects the format of the data, and can handle both plain text and SQLite binary data.
+// opts may be nil, in which case default options are used.
 func (c *Client) Load(ctx context.Context, r io.Reader, opts *LoadOptions) error {
 	params, err := makeURLValues(opts)
 	if err != nil {
 		return err
 	}
-	_ = params
 
 	first13 := make([]byte, 13)
 	_, err = r.Read(first13)
@@ -622,7 +622,6 @@ func (c *Client) Nodes(ctx context.Context, opts *NodeOptions) (json.RawMessage,
 	if err != nil {
 		return nil, err
 	}
-	_ = params
 
 	resp, err := c.doGetRequest(ctx, nodesPath, params)
 	if err != nil {
