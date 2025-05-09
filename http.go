@@ -356,9 +356,12 @@ func (c *Client) SetBasicAuth(username, password string) {
 // PromoteErrors enables or disables the promotion of statement-level errors to Go errors.
 //
 // By default an operation on the client only returns an error if there is a failure at
-// the HTTP level. If this method is called with true, then the client will also return
-// an error if there is any failure at the statement level, setting the returned error
-// to the first statement-level error encountered.
+// the HTTP level and it is up to the caller to inspect the response body for statement-level
+// errors.
+//
+// However if this method is called with true, then the client will also inspect the response
+// body and return an error if there is any failure at the statement level, setting the returned
+// error to the first statement-level error encountered.
 func (c *Client) PromoteErrors(b bool) {
 	c.promoteErrors.Store(b)
 }
@@ -510,7 +513,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 
 // Backup requests a copy of the SQLite database from the node. The caller must close the
 // returned ReadCloser when done, regardless of any error.
-func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser, error) {
+func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (io.ReadCloser, error) {
 	reqParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
@@ -528,7 +531,7 @@ func (c *Client) Backup(ctx context.Context, opts BackupOptions) (io.ReadCloser,
 
 // Load streams data from r into the node, to load or restore data. Load automatically
 // detects the format of the data, and can handle both plain text and SQLite binary data.
-func (c *Client) Load(ctx context.Context, r io.Reader, opts LoadOptions) error {
+func (c *Client) Load(ctx context.Context, r io.Reader, opts *LoadOptions) error {
 	params, err := makeURLValues(opts)
 	if err != nil {
 		return err

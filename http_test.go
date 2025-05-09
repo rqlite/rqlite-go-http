@@ -691,7 +691,7 @@ func Test_Backup(t *testing.T) {
 	if err != nil {
 		t.Fatalf("unexpected error from NewClient: %v", err)
 	}
-	rc, err := cl.Backup(context.Background(), BackupOptions{})
+	rc, err := cl.Backup(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("unexpected error calling Backup: %v", err)
 	}
