@@ -1,7 +1,6 @@
 package http
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 )
@@ -61,12 +60,6 @@ func (s SQLStatement) MarshalJSON() ([]byte, error) {
 // UnmarshalJSON implements a custom JSON representation so that SQL statements
 // always appear as an array in the format rqlite expects.
 func (s *SQLStatement) UnmarshalJSON(data []byte) error {
-	// create a JSON Decoder and tell is to UseNumber
-	// so that it doesn't convert numbers to float64
-	// which would be a lossy conversion
-	dec := json.NewDecoder(bytes.NewReader(data))
-	dec.UseNumber()
-
 	var sql string
 	if err := json.Unmarshal(data, &sql); err == nil {
 		s.SQL = sql
