@@ -88,6 +88,9 @@ type ExecuteOptions struct {
 	// Timeout after which if Wait is set, the system should respond with an error if
 	// the request has not been persisted.
 	Timeout time.Duration `uvalue:"timeout,omitempty"`
+
+	// RaftIndex requests that the Raft log index be included in the response.
+	RaftIndex bool `uvalue:"raft_index,omitempty"`
 }
 
 // QueryOptions holds optional settings for /db/query requests.
@@ -112,6 +115,9 @@ type QueryOptions struct {
 	LinearizableTimeout time.Duration        `uvalue:"linearizable_timeout,omitempty"`
 	Freshness           time.Duration        `uvalue:"freshness,omitempty"`
 	FreshnessStrict     bool                 `uvalue:"freshness_strict,omitempty"`
+
+	// RaftIndex requests that the Raft log index be included in the response.
+	RaftIndex bool `uvalue:"raft_index,omitempty"`
 }
 
 // RequestOptions holds optional settings for /db/request requests.
@@ -130,6 +136,9 @@ type RequestOptions struct {
 	LinearizableTimeout string               `uvalue:"linearizable_timeout,omitempty"`
 	Freshness           string               `uvalue:"freshness,omitempty"`
 	FreshnessStrict     bool                 `uvalue:"freshness_strict,omitempty"`
+
+	// RaftIndex requests that the Raft log index be included in the response.
+	RaftIndex bool `uvalue:"raft_index,omitempty"`
 }
 
 // NodeOptions holds optional settings for /nodes requests.

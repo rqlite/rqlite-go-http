@@ -125,6 +125,13 @@ func Test_Execute(t *testing.T) {
 			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}]}`,
 			expURLValues: nil,
 		},
+		{
+			name:         "single INSERT statement with raft_index enabled",
+			statements:   SQLStatements{&SQLStatement{SQL: "INSERT INTO foo VALUES(?, ?)", PositionalParams: []any{"name", float64(123)}}},
+			opts:         &ExecuteOptions{RaftIndex: true},
+			respBody:     `{"results": [{"last_insert_id": 123, "rows_affected": 456}], "raft_index": 6}`,
+			expURLValues: url.Values{"raft_index": []string{"true"}},
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -215,6 +222,17 @@ func Test_Query(t *testing.T) {
 			opts:         QueryOptions{},
 			expURLValues: nil,
 			respBody:     `{"results": [{"columns": ["?column?"], "values": [[1]]}, {"columns": ["?column?"], "values": [[2]]}], "time": 1.234}`,
+		},
+		{
+			name:       "SELECT query with raft_index enabled",
+			statements: NewSQLStatementsFromStrings([]string{"SELECT * FROM foo"}),
+			opts: QueryOptions{
+				RaftIndex: true,
+			},
+			expURLValues: url.Values{
+				"raft_index": []string{"true"},
+			},
+			respBody: `{"results": [{"columns": ["id", "name"], "values": [[1, "Alice"]]}], "raft_index": 10}`,
 		},
 	}
 
@@ -594,6 +612,122 @@ func Test_RequestAssoc(t *testing.T) {
 	if second.Time != 0.002 {
 		t.Errorf("expected time=0.002, got %f", second.Time)
 	}
+}
+
+func Test_RaftIndex(t *testing.T) {
+	t.Run("ExecuteWithRaftIndex", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/db/execute" {
+				t.Fatalf("Unexpected path: %s", r.URL.Path)
+			}
+
+			q := r.URL.Query()
+			if _, ok := q["raft_index"]; !ok {
+				t.Error("expected ?raft_index=... to be present, but not found")
+			}
+			if got, want := q.Get("raft_index"), "true"; got != want {
+				t.Errorf("expected raft_index=%s, got %s", want, got)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"results": [{"last_insert_id": 123, "rows_affected": 1}], "raft_index": 6}`))
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ts.URL, nil)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+		defer client.Close()
+
+		statements := NewSQLStatementsFromStrings([]string{"INSERT INTO foo VALUES(?, ?)"})
+		opts := &ExecuteOptions{RaftIndex: true}
+
+		resp, err := client.Execute(context.Background(), statements, opts)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+
+		if resp.RaftIndex != 6 {
+			t.Errorf("Expected RaftIndex=6, got %d", resp.RaftIndex)
+		}
+	})
+
+	t.Run("QueryWithRaftIndex", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/db/query" {
+				t.Fatalf("Unexpected path: %s", r.URL.Path)
+			}
+
+			q := r.URL.Query()
+			if _, ok := q["raft_index"]; !ok {
+				t.Error("expected ?raft_index=... to be present, but not found")
+			}
+			if got, want := q.Get("raft_index"), "true"; got != want {
+				t.Errorf("expected raft_index=%s, got %s", want, got)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"results": [{"columns": ["id", "name"], "values": [[1, "Alice"]]}], "raft_index": 10}`))
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ts.URL, nil)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+		defer client.Close()
+
+		statements := NewSQLStatementsFromStrings([]string{"SELECT * FROM foo"})
+		opts := &QueryOptions{RaftIndex: true}
+
+		resp, err := client.Query(context.Background(), statements, opts)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+
+		if resp.RaftIndex != 10 {
+			t.Errorf("Expected RaftIndex=10, got %d", resp.RaftIndex)
+		}
+	})
+
+	t.Run("RequestWithRaftIndex", func(t *testing.T) {
+		ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/db/request" {
+				t.Fatalf("Unexpected path: %s", r.URL.Path)
+			}
+
+			q := r.URL.Query()
+			if _, ok := q["raft_index"]; !ok {
+				t.Error("expected ?raft_index=... to be present, but not found")
+			}
+			if got, want := q.Get("raft_index"), "true"; got != want {
+				t.Errorf("expected raft_index=%s, got %s", want, got)
+			}
+
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte(`{"results": [{"last_insert_id": 1, "rows_affected": 1}], "raft_index": 15}`))
+		}))
+		defer ts.Close()
+
+		client, err := NewClient(ts.URL, nil)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+		defer client.Close()
+
+		statements := NewSQLStatementsFromStrings([]string{"INSERT INTO foo VALUES(?, ?)"})
+		opts := &RequestOptions{RaftIndex: true}
+
+		resp, err := client.Request(context.Background(), statements, opts)
+		if err != nil {
+			t.Fatalf("Expected nil error, got %v", err)
+		}
+
+		if resp.RaftIndex != 15 {
+			t.Errorf("Expected RaftIndex=15, got %d", resp.RaftIndex)
+		}
+	})
 }
 
 func Test_PromoteErrors(t *testing.T) {

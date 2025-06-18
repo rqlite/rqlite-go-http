@@ -209,3 +209,50 @@ func Test_MakeURLValuesSignature(t *testing.T) {
 		t.Fatalf("makeURLValues should have 2 output parameters, got %d", fn.Type().NumOut())
 	}
 }
+
+func Test_RaftIndexOptions(t *testing.T) {
+	t.Run("ExecuteOptions_RaftIndex", func(t *testing.T) {
+		opts := &ExecuteOptions{RaftIndex: true}
+		vals, err := makeURLValues(opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := vals.Get("raft_index"), "true"; got != want {
+			t.Errorf("expected raft_index=%s, got %s", want, got)
+		}
+	})
+
+	t.Run("QueryOptions_RaftIndex", func(t *testing.T) {
+		opts := &QueryOptions{RaftIndex: true}
+		vals, err := makeURLValues(opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := vals.Get("raft_index"), "true"; got != want {
+			t.Errorf("expected raft_index=%s, got %s", want, got)
+		}
+	})
+
+	t.Run("RequestOptions_RaftIndex", func(t *testing.T) {
+		opts := &RequestOptions{RaftIndex: true}
+		vals, err := makeURLValues(opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got, want := vals.Get("raft_index"), "true"; got != want {
+			t.Errorf("expected raft_index=%s, got %s", want, got)
+		}
+	})
+
+	t.Run("RaftIndex_OmitEmpty", func(t *testing.T) {
+		// Test that RaftIndex=false is omitted due to omitempty
+		opts := &ExecuteOptions{RaftIndex: false}
+		vals, err := makeURLValues(opts)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if got := vals.Get("raft_index"); got != "" {
+			t.Errorf("expected raft_index to be omitted when false, got %s", got)
+		}
+	})
+}

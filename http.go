@@ -93,6 +93,7 @@ type ExecuteResponse struct {
 	Results        []ExecuteResult `json:"results"`
 	Time           float64         `json:"time,omitempty"`
 	SequenceNumber int64           `json:"sequence_number,omitempty"`
+	RaftIndex      int64           `json:"raft_index,omitempty"`
 }
 
 // HasError returns true if any of the results in the response contain an error.
@@ -116,8 +117,9 @@ type ExecuteResult struct {
 
 // QueryResponse represents the JSON returned by /db/query in the default (non-associative) form.
 type QueryResponse struct {
-	Results any     `json:"results"`
-	Time    float64 `json:"time,omitempty"`
+	Results   any     `json:"results"`
+	Time      float64 `json:"time,omitempty"`
+	RaftIndex int64   `json:"raft_index,omitempty"`
 }
 
 // QueryResult is an element of QueryResponse.Results.
@@ -204,8 +206,9 @@ func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
 
 // RequestResponse represents the JSON returned by /db/request.
 type RequestResponse struct {
-	Results any     `json:"results"`
-	Time    float64 `json:"time,omitempty"`
+	Results   any     `json:"results"`
+	Time      float64 `json:"time,omitempty"`
+	RaftIndex int64   `json:"raft_index,omitempty"`
 }
 
 // RequestResult is an element of RequestResponse.Results.
