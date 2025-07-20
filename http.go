@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"net/url"
 	"os"
@@ -717,18 +718,9 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 	}
 	fullURL := baseURL.JoinPath(path)
 	currValues := fullURL.Query()
-	for k, v := range values {
-		currValues[k] = v
-	}
+	maps.Copy(currValues, values)
 	fullURL.RawQuery = currValues.Encode()
-
-	func() {
-		c.mu.RLock()
-		defer c.mu.RUnlock()
-		if c.basicAuthUser != "" || c.basicAuthPass != "" {
-			fullURL.User = url.UserPassword(c.basicAuthUser, c.basicAuthPass)
-		}
-	}()
+	c.addUserinfoToURL(fullURL)
 
 	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), body)
 	if err != nil {
@@ -743,6 +735,14 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		return nil, err
 	}
 	return resp, nil
+}
+
+func (c *Client) addUserinfoToURL(u *url.URL) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.basicAuthUser != "" || c.basicAuthPass != "" {
+		u.User = url.UserPassword(c.basicAuthUser, c.basicAuthPass)
+	}
 }
 
 func validSQLiteData(b []byte) bool {
