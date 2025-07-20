@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -324,11 +325,14 @@ type LoadBalancer interface {
 
 // Client is the main type through which rqlite is accessed.
 type Client struct {
-	lb            LoadBalancer
-	httpClient    *http.Client
+	lb         LoadBalancer
+	httpClient *http.Client
+
+	promoteErrors atomic.Bool
+
+	mu            sync.RWMutex
 	basicAuthUser string
 	basicAuthPass string
-	promoteErrors atomic.Bool
 }
 
 // NewClient creates a new Client with default settings. If httpClient is nil,
@@ -352,6 +356,8 @@ func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
 // SetBasicAuth configures the client to use Basic Auth for all subsequent requests.
 // Pass empty strings to disable Basic Auth.
 func (c *Client) SetBasicAuth(username, password string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.basicAuthUser = username
 	c.basicAuthPass = password
 }
@@ -716,9 +722,13 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 	}
 	fullURL.RawQuery = currValues.Encode()
 
-	if c.basicAuthUser != "" || c.basicAuthPass != "" {
-		fullURL.User = url.UserPassword(c.basicAuthUser, c.basicAuthPass)
-	}
+	func() {
+		c.mu.RLock()
+		defer c.mu.RUnlock()
+		if c.basicAuthUser != "" || c.basicAuthPass != "" {
+			fullURL.User = url.UserPassword(c.basicAuthUser, c.basicAuthPass)
+		}
+	}()
 
 	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), body)
 	if err != nil {
