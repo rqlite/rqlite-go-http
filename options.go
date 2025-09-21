@@ -11,13 +11,18 @@ import (
 
 // ReadConsistencyLevel indicates the Read Consistency level requested by
 // the user, if any.
+//
+// Note: Strong is NOT recommended for production systems. It has little
+// use in such systems, as the reads are very costly, consume disk space,
+// and do not offer any benefit over Linearizable reads. Strong reads can
+// be useful in certain testing scenarios however.
 type ReadConsistencyLevel int
 
 const (
 	ReadConsistencyLevelUnknown = iota
 	ReadConsistencyLevelNone
 	ReadConsistencyLevelWeak
-	ReadConsistencyLevelStrong
+	ReadConsistencyLevelStrong // Not recommened for Production systems
 	ReadConsistencyLevelLinearizable
 	ReadConsistencyLevelAuto
 )
