@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -753,6 +754,93 @@ func Test_PromoteErrors(t *testing.T) {
 	_, err = client.Request(context.Background(), nil, nil)
 	if err == nil {
 		t.Fatalf("Expected non-nil error after promoting errors, got nil")
+	}
+}
+
+func Test_Load_SQL(t *testing.T) {
+	expectedData := []byte(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST method, got %s", r.Method)
+		}
+		if r.URL.Path != "/db/load" {
+			t.Fatalf("expected path /db/load, got %s", r.URL.Path)
+		}
+		ct, ok := r.Header["Content-Type"]
+		if !ok {
+			t.Fatal("no Content-Type header")
+		}
+		if ct[0] != "text/plain" {
+			t.Fatalf("wrong Content-Type header: %s", ct)
+		}
+
+		postedData, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed reading request body: %v", err)
+		}
+
+		if !bytes.Equal(postedData, expectedData) {
+			t.Fatalf("posted data does not match.\nwant: %q\ngot:  %q", expectedData, postedData)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
+	dataReader := bytes.NewReader(expectedData)
+	err = cl.Load(context.Background(), dataReader, nil)
+	if err != nil {
+		t.Fatalf("unexpected error calling Load: %v", err)
+	}
+}
+
+func Test_Load_Binary(t *testing.T) {
+	expectedData, err := os.ReadFile("testdata/simple.db")
+	if err != nil {
+		t.Fatalf("failed to read test data: %s", err)
+	}
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Fatalf("expected POST method, got %s", r.Method)
+		}
+		if r.URL.Path != "/db/load" {
+			t.Fatalf("expected path /db/load, got %s", r.URL.Path)
+		}
+		ct, ok := r.Header["Content-Type"]
+		if !ok {
+			t.Fatal("no Content-Type header")
+		}
+		if ct[0] != "application/octet-stream" {
+			t.Fatalf("wrong Content-Type header: %s", ct)
+		}
+
+		postedData, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Fatalf("failed reading request body: %v", err)
+		}
+
+		if !bytes.Equal(postedData, expectedData) {
+			t.Fatalf("posted data does not match.\nwant: %q\ngot:  %q", expectedData, postedData)
+		}
+
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatalf("unexpected error from NewClient: %v", err)
+	}
+	dataReader := bytes.NewReader(expectedData)
+	err = cl.Load(context.Background(), dataReader, nil)
+	if err != nil {
+		t.Fatalf("unexpected error calling Load: %v", err)
 	}
 }
 

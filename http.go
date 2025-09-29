@@ -746,5 +746,5 @@ func (c *Client) addUserinfoToURL(u *url.URL) {
 }
 
 func validSQLiteData(b []byte) bool {
-	return len(b) > 13 && string(b[0:13]) == "SQLite format"
+	return len(b) >= 13 && string(b[0:13]) == "SQLite format"
 }
