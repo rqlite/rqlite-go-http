@@ -94,6 +94,7 @@ func NewHTTPMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string) (*
 type ExecuteResponse struct {
 	Results        []ExecuteResult `json:"results"`
 	Time           float64         `json:"time,omitempty"`
+	Error          string          `json:"error,omitempty"`
 	SequenceNumber int64           `json:"sequence_number,omitempty"`
 	RaftIndex      int64           `json:"raft_index,omitempty"`
 }
@@ -101,6 +102,10 @@ type ExecuteResponse struct {
 // HasError returns true if any of the results in the response contain an error.
 // If an error is found, the index of the result and the error message are returned.
 func (er *ExecuteResponse) HasError() (bool, int, string) {
+	if er.Error != "" {
+		return true, -1, er.Error
+	}
+
 	for i, result := range er.Results {
 		if result.Error != "" {
 			return true, i, result.Error
@@ -121,6 +126,7 @@ type ExecuteResult struct {
 type QueryResponse struct {
 	Results   any     `json:"results"`
 	Time      float64 `json:"time,omitempty"`
+	Error     string  `json:"error,omitempty"`
 	RaftIndex int64   `json:"raft_index,omitempty"`
 }
 
@@ -144,6 +150,10 @@ type QueryResultAssoc struct {
 // HasError returns true if any of the results in the response contain an error.
 // If an error is found, the index of the result and the error message are returned.
 func (qr *QueryResponse) HasError() (bool, int, string) {
+	if qr.Error != "" {
+		return true, -1, qr.Error
+	}
+
 	switch v := qr.Results.(type) {
 	case []QueryResult:
 		for i, result := range v {
@@ -210,6 +220,7 @@ func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
 type RequestResponse struct {
 	Results   any     `json:"results"`
 	Time      float64 `json:"time,omitempty"`
+	Error     string  `json:"error,omitempty"`
 	RaftIndex int64   `json:"raft_index,omitempty"`
 }
 
@@ -256,6 +267,10 @@ func (rr *RequestResponse) GetRequestResultsAssoc() []RequestResultAssoc {
 // HasError returns true if any of the results in the response contain an error.
 // If an error is found, the index of the result and the error message are returned.
 func (rr *RequestResponse) HasError() (bool, int, string) {
+	if rr.Error != "" {
+		return true, -1, rr.Error
+	}
+
 	switch v := rr.Results.(type) {
 	case []RequestResult:
 		for i, result := range v {
