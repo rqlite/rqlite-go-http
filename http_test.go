@@ -716,8 +716,13 @@ func Test_RaftIndex(t *testing.T) {
 }
 
 func Test_PromoteErrors(t *testing.T) {
+	topLevelErr := false
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
+		if topLevelErr {
+			w.Write([]byte(`{"error": "top level error"}`))
+			return
+		}
 		w.Write([]byte(`{"results": [{"error": "some error"}]}`))
 	}))
 	defer ts.Close()
@@ -741,20 +746,26 @@ func Test_PromoteErrors(t *testing.T) {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 
-	client.PromoteErrors(true)
+	testFn := func() {
+		_, err = client.Execute(context.Background(), nil, nil)
+		if err == nil {
+			t.Fatalf("Expected non-nil error after promoting errors, got nil")
+		}
+		_, err = client.Query(context.Background(), nil, nil)
+		if err == nil {
+			t.Fatalf("Expected non-nil error after promoting errors, got nil")
+		}
+		_, err = client.Request(context.Background(), nil, nil)
+		if err == nil {
+			t.Fatalf("Expected non-nil error after promoting errors, got nil")
+		}
+	}
 
-	_, err = client.Execute(context.Background(), nil, nil)
-	if err == nil {
-		t.Fatalf("Expected non-nil error after promoting errors, got nil")
-	}
-	_, err = client.Query(context.Background(), nil, nil)
-	if err == nil {
-		t.Fatalf("Expected non-nil error after promoting errors, got nil")
-	}
-	_, err = client.Request(context.Background(), nil, nil)
-	if err == nil {
-		t.Fatalf("Expected non-nil error after promoting errors, got nil")
-	}
+	client.PromoteErrors(true)
+	testFn()
+
+	topLevelErr = true
+	testFn()
 }
 
 func Test_Load_SQL(t *testing.T) {
