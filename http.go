@@ -197,18 +197,24 @@ func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal into the auxiliary struct.
-	if err := json.Unmarshal(data, aux); err != nil {
+	auxDec := json.NewDecoder(bytes.NewReader(data))
+	auxDec.UseNumber()
+	if err := auxDec.Decode(aux); err != nil {
 		return err
 	}
 
 	var res []QueryResult
-	if err := json.Unmarshal(aux.Results, &res); err == nil {
+	resDec := json.NewDecoder(bytes.NewReader(aux.Results))
+	resDec.UseNumber()
+	if err := resDec.Decode(&res); err == nil {
 		qr.Results = res
 		return nil
 	}
 
 	var resAssoc []QueryResultAssoc
-	if err := json.Unmarshal(aux.Results, &resAssoc); err == nil {
+	resAssocDec := json.NewDecoder(bytes.NewReader(aux.Results))
+	resAssocDec.UseNumber()
+	if err := resAssocDec.Decode(&resAssoc); err == nil {
 		qr.Results = resAssoc
 		return nil
 	}
@@ -300,18 +306,24 @@ func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
 	}
 
 	// Unmarshal into the auxiliary struct.
-	if err := json.Unmarshal(data, aux); err != nil {
+	auxDec := json.NewDecoder(bytes.NewReader(data))
+	auxDec.UseNumber()
+	if err := auxDec.Decode(aux); err != nil {
 		return err
 	}
 
 	var res []RequestResult
-	if err := json.Unmarshal(aux.Results, &res); err == nil {
+	resDec := json.NewDecoder(bytes.NewReader(aux.Results))
+	resDec.UseNumber()
+	if err := resDec.Decode(&res); err == nil {
 		qr.Results = res
 		return nil
 	}
 
 	var resAssoc []RequestResultAssoc
-	if err := json.Unmarshal(aux.Results, &resAssoc); err == nil {
+	resAssocDec := json.NewDecoder(bytes.NewReader(aux.Results))
+	resAssocDec.UseNumber()
+	if err := resAssocDec.Decode(&resAssoc); err == nil {
 		qr.Results = resAssoc
 		return nil
 	}
@@ -430,7 +442,9 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 	}
 
 	var executeResp ExecuteResponse
-	if err := json.Unmarshal(respBody, &executeResp); err != nil {
+	execRespDec := json.NewDecoder(bytes.NewReader(respBody))
+	execRespDec.UseNumber()
+	if err := execRespDec.Decode(&executeResp); err != nil {
 		return nil, err
 	}
 
@@ -479,7 +493,9 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	}
 
 	var queryResponse QueryResponse
-	if err := json.Unmarshal(respBody, &queryResponse); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(respBody))
+	dec.UseNumber()
+	if err := dec.Decode(&queryResponse); err != nil {
 		return nil, err
 	}
 	if c.promoteErrors.Load() {
@@ -528,7 +544,9 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	}
 
 	var reqResp RequestResponse
-	if err := json.Unmarshal(respBody, &reqResp); err != nil {
+	dec := json.NewDecoder(bytes.NewReader(respBody))
+	dec.UseNumber()
+	if err := dec.Decode(&reqResp); err != nil {
 		return nil, err
 	}
 	if c.promoteErrors.Load() {

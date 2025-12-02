@@ -607,7 +607,7 @@ func Test_RequestAssoc(t *testing.T) {
 	if !reflect.DeepEqual(second.Types, map[string]string{"id": "integer", "name": "text"}) {
 		t.Errorf("expected types={\"id\":\"integer\",\"name\":\"text\"}, got %v", second.Types)
 	}
-	if !reflect.DeepEqual(second.Rows, []map[string]any{{"id": float64(1), "name": "alice"}}) {
+	if !reflect.DeepEqual(second.Rows, []map[string]any{{"id": json.Number("1"), "name": "alice"}}) {
 		t.Errorf("unexpected rows: %v", second.Rows)
 	}
 	if second.Time != 0.002 {
