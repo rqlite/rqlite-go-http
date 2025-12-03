@@ -23,6 +23,9 @@ Check out the [documentation](https://pkg.go.dev/github.com/rqlite/rqlite-go-htt
 go get github.com/rqlite/rqlite-go-http
 ```
 
+### Versioning
+This library is under active development is subject to breaking changes. Be sure to use `go mod` to pin any import of this package to specific commit.
+
 ## Example use
 
 ```Go
