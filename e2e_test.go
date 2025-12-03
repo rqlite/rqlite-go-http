@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"testing"
@@ -57,11 +58,11 @@ func Test_EndToEnd(t *testing.T) {
 	if len(results[0].Values) != 1 {
 		t.Fatalf("Unexpected number of rows")
 	}
-	v, ok := results[0].Values[0][0].(float64)
+	v, ok := results[0].Values[0][0].(json.Number)
 	if !ok {
 		t.Fatalf("Unexpected value type: %T", results[0].Values[0][0])
 	}
-	if v != 10 {
+	if v.String() != "10" {
 		t.Fatalf("Unexpected value")
 	}
 
@@ -77,11 +78,11 @@ func Test_EndToEnd(t *testing.T) {
 	if len(reqResults[1].Values) != 1 {
 		t.Fatalf("Unexpected number of rows")
 	}
-	v, ok = reqResults[1].Values[0][0].(float64)
+	v, ok = reqResults[1].Values[0][0].(json.Number)
 	if !ok {
 		t.Fatalf("Unexpected value type: %T", reqResults[0].Values[0][0])
 	}
-	if v != 11 {
+	if v.String() != "11" {
 		t.Fatalf("Unexpected value")
 	}
 }
