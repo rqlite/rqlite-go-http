@@ -77,3 +77,23 @@ func main() {
 	fmt.Printf("QueryResponse: %+v\n", qResp)
 }
 ```
+
+## Handling numbers
+When a JSON response includes a number, this library stores it as a `json.Number`. This avoids precision loss. You can then convert it to the type your schema expects. For example, if you expect an `int64`:
+
+```go
+i, err := row[0].(json.Number).Int64()
+if err != nil {
+    panic("number is not an int64")
+}
+```
+
+The JSON specification limits the size of numbers. If a value exceeds that range, JSON encoders will emit it as a string. To work with very large numbers, use the [`math/big`](https://pkg.go.dev/math/big) package:
+```go
+n := &big.Int{}
+v, ok := n.SetString(row[0].(json.Number).String(), 10)
+if !ok {
+    panic("failed to parse big int")
+}
+// n now holds the parsed big integer.
+```
