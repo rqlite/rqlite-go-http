@@ -24,7 +24,7 @@ go get github.com/rqlite/rqlite-go-http
 ```
 
 ### Versioning
-This library is under active development and is subject to breaking changes. Be sure to use `go mod` to pin any import of this package to specific commit.
+This library is under active development and is subject to breaking changes. Be sure to use `go mod` to pin any import of this package to a specific commit.
 
 ## Example use
 
