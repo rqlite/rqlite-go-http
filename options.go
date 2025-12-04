@@ -19,11 +19,27 @@ import (
 type ReadConsistencyLevel int
 
 const (
+	// ReadConsistencyLevelUnknown indicates that no read consistency level has
+	// been specified.
 	ReadConsistencyLevelUnknown = iota
+
+	// ReadConsistencyLevelNone instructs the node to simply read its local SQLite database.
 	ReadConsistencyLevelNone
+
+	// ReadConsistencyLevelWeak instructs the node to check if it is the Leader before
+	// performing a query.  If it is not the Leader, it will forward the request to the Leader.
 	ReadConsistencyLevelWeak
-	ReadConsistencyLevelStrong // Not recommened for Production systems
+
+	// ReadConsistencyLevelStrong sends the query through the Raft consensus system. It is not
+	// recommened for Production systems
+	ReadConsistencyLevelStrong
+
+	// ReadConsistencyLevelLinearizable instructs the node to perform a linearizable read,
+	// as described in the Raft paper.
 	ReadConsistencyLevelLinearizable
+
+	// ReadConsistencyLevelAuto lets the system choose the best read consistency level for
+	// the node type.
 	ReadConsistencyLevelAuto
 )
 
@@ -156,7 +172,7 @@ type NodeOptions struct {
 
 // ReadyOptions holds optional settings for /readyz requests.
 type ReadyOptions struct {
-	// Sync instructions the node to until it is "caught up" with the Leader.
+	// Sync instructs the node to wait until it is "caught up" with the Leader.
 	Sync bool `uvalue:"sync,omitempty"`
 
 	// Timeout is the maximum time to wait for the node to be ready.
