@@ -304,14 +304,14 @@ func (rr *RequestResponse) HasError() (bool, int, string) {
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for RequestResponse.
-func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
+func (rr *RequestResponse) UnmarshalJSON(data []byte) error {
 	// Define an alias to avoid recursion.
 	type Alias RequestResponse
 	aux := &struct {
 		Results json.RawMessage `json:"results"`
 		*Alias
 	}{
-		Alias: (*Alias)(qr),
+		Alias: (*Alias)(rr),
 	}
 
 	// Unmarshal into the auxiliary struct.
@@ -325,7 +325,7 @@ func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
 	resDec := json.NewDecoder(bytes.NewReader(aux.Results))
 	resDec.UseNumber()
 	if err := resDec.Decode(&res); err == nil {
-		qr.Results = res
+		rr.Results = res
 		return nil
 	}
 
@@ -333,7 +333,7 @@ func (qr *RequestResponse) UnmarshalJSON(data []byte) error {
 	resAssocDec := json.NewDecoder(bytes.NewReader(aux.Results))
 	resAssocDec.UseNumber()
 	if err := resAssocDec.Decode(&resAssoc); err == nil {
-		qr.Results = resAssoc
+		rr.Results = resAssoc
 		return nil
 	}
 
@@ -654,7 +654,7 @@ func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // Expvar returns the Go expvar data from the node.
@@ -671,7 +671,7 @@ func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // Nodes returns the list of known nodes in the cluster.
@@ -693,7 +693,7 @@ func (c *Client) Nodes(ctx context.Context, opts *NodeOptions) (json.RawMessage,
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // Ready returns the readiness of the node.
