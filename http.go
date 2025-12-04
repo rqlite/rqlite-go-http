@@ -654,7 +654,7 @@ func (c *Client) Status(ctx context.Context) (json.RawMessage, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // Expvar returns the Go expvar data from the node.
@@ -671,7 +671,7 @@ func (c *Client) Expvar(ctx context.Context) (json.RawMessage, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // Nodes returns the list of known nodes in the cluster.
@@ -693,7 +693,7 @@ func (c *Client) Nodes(ctx context.Context, opts *NodeOptions) (json.RawMessage,
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return json.RawMessage(b), nil
+	return b, nil
 }
 
 // Ready returns the readiness of the node.
