@@ -37,7 +37,7 @@ func NewSQLStatement(stmt string, args ...any) (*SQLStatement, error) {
 
 // MarshalJSON implements a custom JSON representation so that SQL statements
 // always appear as an array in the format rqlite expects.
-func (s SQLStatement) MarshalJSON() ([]byte, error) {
+func (s *SQLStatement) MarshalJSON() ([]byte, error) {
 	if len(s.NamedParams) > 0 {
 		// e.g. ["INSERT INTO foo(name, age) VALUES(:name, :age)", { "name": "...", "age": ... }]
 		arr := []any{s.SQL, s.NamedParams}
@@ -108,8 +108,8 @@ func NewSQLStatementsFromStrings(stmts []string) SQLStatements {
 
 // MarshalJSON for SQLStatements produces a JSON array whose
 // elements are each statement’s custom JSON form.
-func (sts SQLStatements) MarshalJSON() ([]byte, error) {
-	return json.Marshal([]*SQLStatement(sts))
+func (sts *SQLStatements) MarshalJSON() ([]byte, error) {
+	return json.Marshal([]*SQLStatement(*sts))
 }
 
 func (sts *SQLStatements) UnmarshalJSON(data []byte) error {
