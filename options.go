@@ -101,9 +101,9 @@ type ExecuteOptions struct {
 	// Queue requests that the statement be queued
 	Queue bool `uvalue:"queue,omitempty"`
 
-	// Wait requests that the system only respond once the statement has been committed.
+	// Wait requests that the system only respond once the statement has been applied.
 	// This is ignored unless Queue is true. If Queue is not true, an Execute request
-	// always waits until the request has been committed.
+	// always waits until the request has been applied to the database.
 	Wait bool `uvalue:"wait,omitempty"`
 
 	// Timeout after which if Wait is set, the system should respond with an error if
