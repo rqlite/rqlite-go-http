@@ -122,15 +122,23 @@ type ExecuteResult struct {
 	Error        string  `json:"error,omitempty"`
 }
 
-// QueryResponse represents the JSON returned by /db/query in the default (non-associative) form.
+// QueryResults is a placeholder for either []QueryResult or []QueryResultAssoc.
+type QueryResults any
+
+// QueryResponse represents the JSON returned by /db/query.
+//
+// To access the results, type assert QueryResponse.Results to either []QueryResult or
+// []QueryResultAssoc checking the type at runtime, or if you know the type in advance,
+// use GetQueryResults or GetQueryResultsAssoc.
 type QueryResponse struct {
-	Results   any     `json:"results"`
-	Time      float64 `json:"time,omitempty"`
-	Error     string  `json:"error,omitempty"`
-	RaftIndex int64   `json:"raft_index,omitempty"`
+	Results   QueryResults `json:"results"`
+	Time      float64      `json:"time,omitempty"`
+	Error     string       `json:"error,omitempty"`
+	RaftIndex int64        `json:"raft_index,omitempty"`
 }
 
-// QueryResult is an element of QueryResponse.Results.
+// QueryResult is an element of QueryResponse.Results. This is the default form
+// returned by rqlite.
 type QueryResult struct {
 	Columns []string `json:"columns"`
 	Types   []string `json:"types"`
@@ -140,6 +148,7 @@ type QueryResult struct {
 }
 
 // QueryResultAssoc is an element of QueryResponse.Results, but in an associative form.
+// This is returned by rqlite when the "associative" form is requested.
 type QueryResultAssoc struct {
 	Types map[string]string `json:"types"`
 	Rows  []map[string]any  `json:"rows"`
