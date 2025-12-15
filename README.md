@@ -79,7 +79,7 @@ func main() {
 ```
 
 ## Handling numbers
-When a JSON response includes a number, this library stores it as a `json.Number`. This avoids precision loss. You can then convert it to the type your schema expects. For example, if you expect an `int64`:
+When a JSON response includes a number, this library stores it as a [`json.Number`](https://pkg.go.dev/encoding/json#Number). This avoids precision loss. You can then convert it to the type your schema expects. For example, if you expect an `int64`:
 
 ```go
 i, err := row[0].(json.Number).Int64()
