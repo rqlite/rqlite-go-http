@@ -79,7 +79,7 @@ func main() {
 ```
 
 ## Handling numbers
-When a JSON response includes a number, this library stores it as a [`json.Number`](https://pkg.go.dev/encoding/json#Number). This avoids precision loss. You can then convert it to the type your schema expects. For example, if you expect an `int64`:
+When handling a JSON response from rqlite which a number, this library stores it as a [`json.Number`](https://pkg.go.dev/encoding/json#Number). This avoids precision loss. You can then convert it to the type your schema expects. For example, if you expect an `int64`:
 
 ```go
 i, err := row[0].(json.Number).Int64()
@@ -88,7 +88,7 @@ if err != nil {
 }
 ```
 
-The JSON specification limits the size of numbers. If a value exceeds that range, JSON encoders will emit it as a string. To work with very large numbers, use the [`math/big`](https://pkg.go.dev/math/big) package:
+The JSON specification limits the size of numbers, and the Go standard library JSON encoder represents any number larger than the limit as a string. When working with a JSON response containing such values-as-strings, use the [`math/big`](https://pkg.go.dev/math/big) package:
 ```go
 n := &big.Int{}
 v, ok := n.SetString(row[0].(json.Number).String(), 10)
