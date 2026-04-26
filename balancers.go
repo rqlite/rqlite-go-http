@@ -121,7 +121,7 @@ func NewRoundRobinBalancer(urls []string, chckFn HostChecker, d time.Duration) (
 	return rrb, nil
 }
 
-//Next returns next available healthy Node in Round-Robin Order
+// Next returns next available healthy Node in Round-Robin Order
 func (rrb *RoundRobinBalancer) Next() (*url.URL, error) {
 	rrb.mu.Lock()
 
@@ -152,7 +152,7 @@ func (rrb *RoundRobinBalancer) MarkBad(u *url.URL) {
 	}
 }
 
-//returns a list of healthy nodes
+// returns a list of healthy nodes
 func (rrb *RoundRobinBalancer) Healthy() []*url.URL {
 	rrb.mu.RLock()
 	defer rrb.mu.RUnlock()
@@ -161,7 +161,7 @@ func (rrb *RoundRobinBalancer) Healthy() []*url.URL {
 	return healthy
 }
 
-//returns the current Bad Nodes
+// returns the current Bad Nodes
 func (rrb *RoundRobinBalancer) Bad() []*url.URL {
 	rrb.mu.RLock()
 	defer rrb.mu.RUnlock()

@@ -405,8 +405,8 @@ func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
 	return NewClientWithLoadBalancer(lb, httpClient)
 }
 
-//NewRoundRobinClient creates a new Client that automatically selects
-//nodes in round-robin order and suppports health checking for hosts marked bad.
+// NewRoundRobinClient creates a new Client that automatically selects
+// nodes in round-robin order and suppports health checking for hosts marked bad.
 func NewRoundRobinClient(baseURLs []string, chckFn HostChecker, d time.Duration, httpClient *http.Client) (*Client, error) {
 	lb, err := NewRoundRobinBalancer(baseURLs, chckFn, d)
 	if err != nil {
