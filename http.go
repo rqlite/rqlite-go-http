@@ -360,6 +360,14 @@ type LoadBalancer interface {
 	Next() (*url.URL, error)
 }
 
+type badHostMarker interface {
+	MarkBad(*url.URL)
+}
+
+type LoadBalancerCloser interface {
+	Close()
+}
+
 // Client is the main type through which rqlite is accessed.
 type Client struct {
 	lb         LoadBalancer
@@ -372,12 +380,11 @@ type Client struct {
 	basicAuthPass string
 }
 
-// NewClient creates a new Client with default settings. If httpClient is nil,
-// the the default client is used.
-func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
-	lb, err := NewLoopbackBalancer(baseURL)
-	if err != nil {
-		return nil, err
+// NewClientWithLoadBalancer creates a new Client that uses the given load balancer.
+// If httpClient is nil, the default HTTP client is used.
+func NewClientWithLoadBalancer(lb LoadBalancer, httpClient *http.Client) (*Client, error) {
+	if lb == nil {
+		return nil, fmt.Errorf("load balancer cannot be nil")
 	}
 
 	cl := &Client{
@@ -388,6 +395,24 @@ func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
 		cl.httpClient = DefaultHTTPClient()
 	}
 	return cl, nil
+}
+
+func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
+	lb, err := NewLoopbackBalancer(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return NewClientWithLoadBalancer(lb, httpClient)
+}
+
+//NewRoundRobinClient creates a new Client that automatically selects
+//nodes in round-robin order and suppports health checking for hosts marked bad.
+func NewRoundRobinClient(baseURLs []string, chckFn HostChecker, d time.Duration, httpClient *http.Client) (*Client, error) {
+	lb, err := NewRoundRobinBalancer(baseURLs, chckFn, d)
+	if err != nil {
+		return nil, err
+	}
+	return NewClientWithLoadBalancer(lb, httpClient)
 }
 
 // SetBasicAuth configures the client to use Basic Auth for all subsequent requests.
@@ -733,6 +758,9 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 
 // Close closes the client and should be called when the client is no longer needed.
 func (c *Client) Close() error {
+	if closer, ok := c.lb.(LoadBalancerCloser); ok {
+		closer.Close()
+	}
 	return nil
 }
 
@@ -754,29 +782,53 @@ func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url
 
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
-	baseURL, err := c.lb.Next()
-	if err != nil {
-		return nil, err
+	var bodyBytes []byte
+	if body != nil {
+		var err error
+		bodyBytes, err = io.ReadAll(body)
+		if err != nil {
+			return nil, err
+		}
 	}
-	fullURL := baseURL.JoinPath(path)
-	currValues := fullURL.Query()
-	maps.Copy(currValues, values)
-	fullURL.RawQuery = currValues.Encode()
-	c.addUserinfoToURL(fullURL)
+	var lastErr error
+	for {
+		baseURL, err := c.lb.Next()
+		if err != nil {
+			if lastErr != nil {
+				return nil, fmt.Errorf("%w:%v", ErrNoHostsAvailable, lastErr)
+			}
+			return nil, err
+		}
+		fullURL := baseURL.JoinPath(path)
+		currValues := fullURL.Query()
+		maps.Copy(currValues, values)
+		fullURL.RawQuery = currValues.Encode()
+		c.addUserinfoToURL(fullURL)
 
-	req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), body)
-	if err != nil {
-		return nil, err
-	}
-	if contentType != "" {
-		req.Header.Set("Content-Type", contentType)
-	}
+		var reqBody io.Reader
+		if bodyBytes != nil {
+			reqBody = bytes.NewReader(bodyBytes)
+		}
+		req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), reqBody)
+		if err != nil {
+			return nil, err
+		}
+		if contentType != "" {
+			req.Header.Set("Content-Type", contentType)
+		}
 
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return nil, err
+		resp, err := c.httpClient.Do(req)
+		if err == nil {
+			return resp, nil
+		}
+
+		lastErr = err
+		if marker, ok := c.lb.(badHostMarker); ok {
+			marker.MarkBad(baseURL)
+		} else {
+			return nil, err
+		}
 	}
-	return resp, nil
 }
 
 func (c *Client) addUserinfoToURL(u *url.URL) {

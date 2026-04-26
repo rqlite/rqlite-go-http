@@ -5,6 +5,7 @@ import (
 	"math/rand/v2"
 	"net/url"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -66,6 +67,164 @@ type RandomBalancer struct {
 
 	wg   sync.WaitGroup
 	done chan struct{}
+}
+
+type RoundRobinBalancer struct {
+	mu        sync.RWMutex
+	goodHosts []*url.URL
+	badHosts  []*url.URL
+	next      atomic.Uint64
+
+	chckInterval time.Duration
+	chckFn       HostChecker
+	ch           chan *url.URL
+
+	wg   sync.WaitGroup
+	done chan struct{}
+
+	closeOnce sync.Once
+}
+
+func NewRoundRobinBalancer(urls []string, chckFn HostChecker, d time.Duration) (*RoundRobinBalancer, error) {
+
+	hosts := make(map[string]struct{}, len(urls))
+	goodHosts := make([]*url.URL, 0, len(urls))
+
+	for _, s := range urls {
+		u, err := url.Parse(s)
+		if err != nil {
+			return nil, err
+		}
+		if _, ok := hosts[u.String()]; ok {
+			return nil, ErrDuplicateAddresses
+		}
+		hosts[u.String()] = struct{}{}
+		goodHosts = append(goodHosts, u)
+	}
+
+	if len(goodHosts) == 0 {
+		return nil, ErrNoHostsAvailable
+	}
+
+	rrb := &RoundRobinBalancer{
+		goodHosts:    goodHosts,
+		chckInterval: d,
+		chckFn:       chckFn,
+		done:         make(chan struct{}),
+	}
+
+	if chckFn != nil && d > 0 {
+		rrb.wg.Add(1)
+		go rrb.checkBadHosts()
+	}
+
+	return rrb, nil
+}
+
+//Next returns next available healthy Node in Round-Robin Order
+func (rrb *RoundRobinBalancer) Next() (*url.URL, error) {
+	rrb.mu.Lock()
+
+	defer rrb.mu.Unlock()
+
+	if len(rrb.goodHosts) == 0 {
+		return nil, ErrNoHostsAvailable
+	}
+
+	idx := (rrb.next.Add(1) - 1) % uint64(len(rrb.goodHosts))
+	return rrb.goodHosts[idx], nil
+}
+
+func (rrb *RoundRobinBalancer) MarkBad(u *url.URL) {
+	rrb.mu.Lock()
+	defer rrb.mu.Unlock()
+
+	for i, host := range rrb.goodHosts {
+		if host.String() != u.String() {
+			continue
+		}
+
+		rrb.goodHosts = append(rrb.goodHosts[:i], rrb.goodHosts[i+1:]...)
+		if !containsURL(rrb.badHosts, host) {
+			rrb.badHosts = append(rrb.badHosts, host)
+		}
+		break
+	}
+}
+
+//returns a list of healthy nodes
+func (rrb *RoundRobinBalancer) Healthy() []*url.URL {
+	rrb.mu.RLock()
+	defer rrb.mu.RUnlock()
+	healthy := make([]*url.URL, len(rrb.goodHosts))
+	copy(healthy, rrb.goodHosts)
+	return healthy
+}
+
+//returns the current Bad Nodes
+func (rrb *RoundRobinBalancer) Bad() []*url.URL {
+	rrb.mu.RLock()
+	defer rrb.mu.RUnlock()
+	bad := make([]*url.URL, len(rrb.badHosts))
+	copy(bad, rrb.badHosts)
+	return bad
+}
+
+func (rrb *RoundRobinBalancer) Close() {
+	if rrb.chckFn == nil || rrb.chckInterval <= 0 {
+		return
+	}
+	rrb.closeOnce.Do(func() {
+		close(rrb.done)
+		rrb.wg.Wait()
+	})
+}
+
+func (rrb *RoundRobinBalancer) checkBadHosts() {
+	defer rrb.wg.Done()
+	ticker := time.NewTicker(rrb.chckInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			rrb.mu.RLock()
+			bad := make([]*url.URL, len(rrb.badHosts))
+			copy(bad, rrb.badHosts)
+			rrb.mu.RUnlock()
+			for _, host := range bad {
+				if !rrb.chckFn(host) {
+					continue
+				}
+				rrb.mu.Lock()
+				if removeURL(&rrb.badHosts, host) && !containsURL(rrb.goodHosts, host) {
+					rrb.goodHosts = append(rrb.goodHosts, host)
+				}
+				rrb.mu.Unlock()
+			}
+		case <-rrb.done:
+			return
+		}
+	}
+}
+
+func containsURL(urls []*url.URL, target *url.URL) bool {
+	for _, u := range urls {
+		if u.String() == target.String() {
+			return true
+		}
+	}
+	return false
+}
+func removeURL(urls *[]*url.URL, target *url.URL) bool {
+	for i, u := range *urls {
+		if u.String() != target.String() {
+			continue
+		}
+		*urls = append((*urls)[:i], (*urls)[i+1:]...)
+		return true
+	}
+	return false
 }
 
 // NewRandomBalancer returns a new RandomBalancer.
