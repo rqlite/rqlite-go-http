@@ -380,6 +380,14 @@ type Client struct {
 	basicAuthPass string
 }
 
+func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
+	lb, err := NewLoopbackBalancer(baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return NewClientWithLoadBalancer(lb, httpClient)
+}
+
 // NewClientWithLoadBalancer creates a new Client that uses the given load balancer.
 // If httpClient is nil, the default HTTP client is used.
 func NewClientWithLoadBalancer(lb LoadBalancer, httpClient *http.Client) (*Client, error) {
@@ -395,14 +403,6 @@ func NewClientWithLoadBalancer(lb LoadBalancer, httpClient *http.Client) (*Clien
 		cl.httpClient = DefaultHTTPClient()
 	}
 	return cl, nil
-}
-
-func NewClient(baseURL string, httpClient *http.Client) (*Client, error) {
-	lb, err := NewLoopbackBalancer(baseURL)
-	if err != nil {
-		return nil, err
-	}
-	return NewClientWithLoadBalancer(lb, httpClient)
 }
 
 // NewRoundRobinClient creates a new Client that automatically selects

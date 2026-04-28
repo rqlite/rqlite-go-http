@@ -15,7 +15,6 @@ func Test_NewRoundRobinBalancer(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected nil error, got %v", err)
 	}
-
 	defer rrb.Close()
 	if rrb == nil {
 		t.Fatalf("expected non-nil balancer, got nil")
@@ -24,7 +23,7 @@ func Test_NewRoundRobinBalancer(t *testing.T) {
 
 func Test_NewRoundRobinBalancer_EmptyURLs(t *testing.T) {
 	_, err := NewRoundRobinBalancer([]string{}, nil, 0)
-	if !errors.Is(err, ErrNoHostsAvailable) {
+	if !errors.Is(err, ErrNoURLSupplied) {
 		t.Fatalf("expected ErrHostsAvailable,got %v", err)
 	}
 }

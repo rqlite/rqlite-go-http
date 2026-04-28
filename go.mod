@@ -1,3 +1,3 @@
 module github.com/rqlite/rqlite-go-http
 
-go 1.23.3
+go 1.25.1
