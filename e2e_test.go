@@ -19,10 +19,15 @@ func Test_EndToEnd(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creating client: %s", err)
 	}
+	defer client.Close()
+
+	if _, err := client.ExecuteSingle(ctx, "DROP TABLE IF EXISTS foo"); err != nil {
+		t.Fatalf("Error creating table: %s", err)
+	}
+
 	if _, err := client.ExecuteSingle(ctx, "CREATE TABLE foo (id INT, name TEXT)"); err != nil {
 		t.Fatalf("Error creating table: %s", err)
 	}
-	defer client.Close()
 
 	if _, err := client.ExecuteSingle(ctx, "CREATE TABLE foo (id INT, name TEXT)"); err != nil {
 		t.Fatalf("Unexpected error creating an already created table: %s", err)
@@ -85,4 +90,15 @@ func Test_EndToEnd(t *testing.T) {
 	if v.String() != "11" {
 		t.Fatalf("Unexpected value")
 	}
+}
+
+func Test_EndToEnd_LoadBalancer(t *testing.T) {
+	host, ok := os.LookupEnv("RQLITE_GO_HTTP_E2E_HOST")
+	if !ok {
+		t.Skip("Skipping end-to-end test since no host is set")
+	}
+	ctx := context.Background()
+
+	_ = host
+	_ = ctx
 }
