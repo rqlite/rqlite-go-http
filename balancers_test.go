@@ -6,6 +6,56 @@ import (
 	"testing"
 )
 
+// -----Hosts Tests ----------
+
+func Test_Hosts_ContainsURL(t *testing.T) {
+	u1, err := url.Parse("http://host1:4001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u2, err := url.Parse("http://host2:4001")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hosts := Hosts{u1}
+	if !hosts.ContainsURL(u1) {
+		t.Fatal("expected hosts to contain u1")
+	}
+	if hosts.ContainsURL(u2) {
+		t.Fatal("expected hosts not to contain u2")
+	}
+}
+
+func Test_Hosts_RemoveURL(t *testing.T) {
+	u1, err := url.Parse("http://host1:4001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u2, err := url.Parse("http://host2:4001")
+	if err != nil {
+		t.Fatal(err)
+	}
+	u3, err := url.Parse("http://host3:4001")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	hosts := Hosts{u1, u2}
+	if !hosts.RemoveURL(u1) {
+		t.Fatal("expected RemoveURL to remove u1")
+	}
+	if hosts.ContainsURL(u1) {
+		t.Fatal("expected u1 to be removed")
+	}
+	if !hosts.ContainsURL(u2) {
+		t.Fatal("expected u2 to remain")
+	}
+	if hosts.RemoveURL(u3) {
+		t.Fatal("expected RemoveURL to return false for missing URL")
+	}
+}
+
 // -----RoundRobinBalancer Tests ----------
 
 func Test_NewRoundRobinBalancer(t *testing.T) {

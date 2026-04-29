@@ -15,7 +15,9 @@ var (
 	// ErrDuplicateAddresses is returned when duplicate addresses are provided
 	// to a balancer.
 	ErrDuplicateAddresses = errors.New("duplicate addresses provided")
-	ErrNoURLSupplied      = errors.New("no host URLs supplied")
+
+	// ErrNoURLSupplied is returned when no host URLs are supplied.
+	ErrNoURLSupplied = errors.New("no host URLs supplied")
 )
 
 // LoopbackBalancer takes a single address and always returns it when Next() is called.
@@ -69,7 +71,9 @@ type RandomBalancer struct {
 	done chan struct{}
 }
 
+// Hosts is a slice of host URLs used by balancers to track host state.
 type Hosts []*url.URL
+
 type RoundRobinBalancer struct {
 	mu        sync.RWMutex
 	goodHosts Hosts
@@ -86,22 +90,21 @@ type RoundRobinBalancer struct {
 	closeOnce sync.Once
 }
 
+// NewRoundRobinBalancer returns a RoundRobinBalancer initialized with the
+// supplied URLs, health checker, and check interval.
 func NewRoundRobinBalancer(urls []string, chckFn HostChecker, d time.Duration) (*RoundRobinBalancer, error) {
 	if len(urls) == 0 {
 		return nil, ErrNoURLSupplied
 	}
-	hosts := make(map[string]struct{}, len(urls))
-	goodHosts := make([]*url.URL, 0, len(urls))
-
+	goodHosts := make(Hosts, 0, len(urls))
 	for _, s := range urls {
 		u, err := url.Parse(s)
 		if err != nil {
 			return nil, err
 		}
-		if _, ok := hosts[u.String()]; ok {
+		if goodHosts.ContainsURL(u) {
 			return nil, ErrDuplicateAddresses
 		}
-		hosts[u.String()] = struct{}{}
 		goodHosts = append(goodHosts, u)
 	}
 
@@ -131,6 +134,8 @@ func (rrb *RoundRobinBalancer) Next() (*url.URL, error) {
 	return rrb.goodHosts[idx], nil
 }
 
+// MarkBad moves a healthy host to the bad host list so it is skipped until it
+// passes health checking again.
 func (rrb *RoundRobinBalancer) MarkBad(u *url.URL) {
 	rrb.mu.Lock()
 	defer rrb.mu.Unlock()
@@ -141,7 +146,7 @@ func (rrb *RoundRobinBalancer) MarkBad(u *url.URL) {
 		}
 
 		rrb.goodHosts = append(rrb.goodHosts[:i], rrb.goodHosts[i+1:]...)
-		if !rrb.badHosts.containsURL(host) {
+		if !rrb.badHosts.ContainsURL(host) {
 			rrb.badHosts = append(rrb.badHosts, host)
 		}
 		break
@@ -174,6 +179,8 @@ func (rrb *RoundRobinBalancer) Close() {
 	})
 }
 
+// checkBadHosts periodically checks bad hosts and restores healthy ones to the
+// round-robin pool.
 func (rrb *RoundRobinBalancer) checkBadHosts() {
 	ticker := time.NewTicker(rrb.chckInterval)
 	defer ticker.Stop()
@@ -189,7 +196,7 @@ func (rrb *RoundRobinBalancer) checkBadHosts() {
 					continue
 				}
 				rrb.mu.Lock()
-				if rrb.badHosts.removeURL(host) && !rrb.badHosts.containsURL(host) {
+				if rrb.badHosts.RemoveURL(host) && !rrb.badHosts.ContainsURL(host) {
 					rrb.goodHosts = append(rrb.goodHosts, host)
 				}
 				rrb.mu.Unlock()
@@ -200,7 +207,8 @@ func (rrb *RoundRobinBalancer) checkBadHosts() {
 	}
 }
 
-func (h Hosts) containsURL(target *url.URL) bool {
+// ContainsURL reports whether the host list contains the target URL.
+func (h Hosts) ContainsURL(target *url.URL) bool {
 	for _, u := range h {
 		if u.String() == target.String() {
 			return true
@@ -208,7 +216,10 @@ func (h Hosts) containsURL(target *url.URL) bool {
 	}
 	return false
 }
-func (h *Hosts) removeURL(target *url.URL) bool {
+
+// RemoveURL removes the target URL from the host list and reports whether it
+// was found.
+func (h *Hosts) RemoveURL(target *url.URL) bool {
 	for i, u := range *h {
 		if u.String() != target.String() {
 			continue
@@ -301,6 +312,8 @@ func (rb *RandomBalancer) Close() {
 	rb.wg.Wait()
 }
 
+// checkBadHosts periodically checks unhealthy hosts and queues hosts that have
+// become healthy again.
 func (rb *RandomBalancer) checkBadHosts() {
 	defer rb.wg.Done()
 	ticker := time.NewTicker(rb.chkInterval)
@@ -322,6 +335,8 @@ func (rb *RandomBalancer) checkBadHosts() {
 	}
 }
 
+// markGoodHosts marks hosts received from the health-check channel as healthy
+// again.
 func (rb *RandomBalancer) markGoodHosts() {
 	defer rb.wg.Done()
 	for {
