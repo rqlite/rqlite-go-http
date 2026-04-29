@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"reflect"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -182,7 +183,7 @@ func Test_Execute(t *testing.T) {
 			}
 			expER := mustUnmarshalExecuteResponse(tt.respBody)
 
-			if reflect.DeepEqual(expER, gotER) {
+			if !reflect.DeepEqual(expER, *gotER) {
 				t.Fatalf("Expected %+v, got %+v", expER, gotER)
 			}
 		})
@@ -1113,4 +1114,70 @@ func mustParseDuration(s string) time.Duration {
 		panic(err)
 	}
 	return d
+}
+
+func Test_RoundRobinClient_RoundRobins(t *testing.T) {
+	var hits1, hits2 atomic.Int32
+
+	s1 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits1.Add(1)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer s1.Close()
+
+	s2 := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		hits2.Add(1)
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer s2.Close()
+
+	c, err := NewRoundRobinClient([]string{s1.URL, s2.URL}, nil, 0, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	for i := 0; i < 4; i++ {
+		if _, err := c.Status(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if hits1.Load() != 2 || hits2.Load() != 2 {
+		t.Fatalf("expected 2 hits each, got %d and %d", hits1.Load(), hits2.Load())
+	}
+}
+
+func Test_Client_RetriesBadHost(t *testing.T) {
+	bad := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
+	badURL := bad.URL
+	bad.Close()
+
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{}`))
+	}))
+	defer good.Close()
+
+	lb, err := NewRoundRobinBalancer([]string{badURL, good.URL}, nil, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lb.Close()
+
+	c, err := NewClientWithLoadBalancer(lb, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+
+	if _, err := c.Status(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(lb.Bad()) != 1 {
+		t.Fatalf("expected 1 bad host, got %d", len(lb.Bad()))
+	}
 }

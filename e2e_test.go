@@ -99,6 +99,47 @@ func Test_EndToEnd_LoadBalancer(t *testing.T) {
 	}
 	ctx := context.Background()
 
-	_ = host
-	_ = ctx
+	client, err := NewRoundRobinClient([]string{fmt.Sprintf("http://%s:4001", host)}, nil, 0, nil)
+	if err != nil {
+		t.Fatalf("Error creating round-robin client: %s", err)
+	}
+	defer client.Close()
+
+	if _, err := client.ExecuteSingle(ctx, "DROP TABLE IF EXISTS lb_foo"); err != nil {
+		t.Fatalf("Error dropping table: %s", err)
+	}
+
+	if _, err := client.ExecuteSingle(ctx, "CREATE TABLE lb_foo (id INT, name TEXT)"); err != nil {
+		t.Fatalf("Error creating table: %s", err)
+	}
+
+	if _, err := client.ExecuteSingle(ctx, `INSERT INTO lb_foo(name) VALUES("fiona")`); err != nil {
+		t.Fatalf("Error inserting row: %s", err)
+	}
+
+	stmt, err := NewSQLStatement("SELECT COUNT(*) FROM lb_foo")
+	if err != nil {
+		t.Fatalf("Error creating statement: %s", err)
+	}
+
+	resp, err := client.Query(ctx, SQLStatements{stmt}, nil)
+	if err != nil {
+		t.Fatalf("Error querying row count: %s", err)
+	}
+
+	results := resp.GetQueryResults()
+	if len(results) != 1 {
+		t.Fatalf("Unexpected number of results")
+	}
+	if len(results[0].Values) != 1 {
+		t.Fatalf("Unexpected number of rows")
+	}
+
+	v, ok := results[0].Values[0][0].(json.Number)
+	if !ok {
+		t.Fatalf("Unexpected value type: %T", results[0].Values[0][0])
+	}
+	if v.String() != "1" {
+		t.Fatalf("Unexpected value")
+	}
 }
