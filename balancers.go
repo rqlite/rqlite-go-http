@@ -74,6 +74,8 @@ type RandomBalancer struct {
 // Hosts is a slice of host URLs used by balancers to track host state.
 type Hosts []*url.URL
 
+// RoundRobinBalancer cycles through healthy hosts in order and can
+// optionally restore bad hosts after health checks succeed.
 type RoundRobinBalancer struct {
 	mu        sync.RWMutex
 	goodHosts Hosts
