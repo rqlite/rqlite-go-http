@@ -175,12 +175,15 @@ func (rrb *RoundRobinBalancer) Bad() []*url.URL {
 	return bad
 }
 
-// Close stops the balancer's background health checker
-func (rrb *RoundRobinBalancer) Close() {
+// Close stops the balancer's background health checker. It is safe to call
+// multiple times. It always returns nil; the error in the signature is provided
+// so the type satisfies LoadBalancerCloser.
+func (rrb *RoundRobinBalancer) Close() error {
 	rrb.closeOnce.Do(func() {
 		close(rrb.done)
 		rrb.wg.Wait()
 	})
+	return nil
 }
 
 // checkBadHosts periodically checks bad hosts and restores healthy ones to the
@@ -228,7 +231,9 @@ func (h *Hosts) RemoveURL(target *url.URL) bool {
 		if u.String() != target.String() {
 			continue
 		}
-		*h = append((*h)[:i], (*h)[i+1:]...)
+		copy((*h)[i:], (*h)[i+1:])
+		(*h)[len(*h)-1] = nil
+		*h = (*h)[:len(*h)-1]
 		return true
 	}
 	return false
@@ -315,11 +320,14 @@ func (rb *RandomBalancer) Bad() []*url.URL {
 }
 
 // Close closes the RandomBalancer. A closed RandomBalancer should not be reused.
-func (rb *RandomBalancer) Close() {
+// It is safe to call multiple times. It always returns nil; the error in the
+// signature is provided so the type satisfies LoadBalancerCloser.
+func (rb *RandomBalancer) Close() error {
 	rb.closeOnce.Do(func() {
 		close(rb.done)
 		rb.wg.Wait()
 	})
+	return nil
 }
 
 // checkBadHosts periodically checks unhealthy hosts and queues hosts that have
