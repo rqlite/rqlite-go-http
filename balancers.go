@@ -256,9 +256,11 @@ func NewRandomBalancer(urls []string, chckFn HostChecker, d time.Duration) (*Ran
 		done:        make(chan struct{}),
 	}
 
-	rb.wg.Add(2)
-	go rb.checkBadHosts()
-	go rb.markGoodHosts()
+	if chckFn != nil && d > 0 {
+		rb.wg.Add(2)
+		go rb.checkBadHosts()
+		go rb.markGoodHosts()
+	}
 	return rb, nil
 }
 
@@ -279,7 +281,9 @@ func (rb *RandomBalancer) Next() (*url.URL, error) {
 func (rb *RandomBalancer) MarkBad(u *url.URL) {
 	rb.mu.Lock()
 	defer rb.mu.Unlock()
-	rb.hosts[u.String()].Healthy = false
+	if h, ok := rb.hosts[u.String()]; ok {
+		h.Healthy = false
+	}
 }
 
 // Healthy returns the slice of currently healthy hosts.
@@ -319,18 +323,29 @@ func (rb *RandomBalancer) Close() {
 func (rb *RandomBalancer) checkBadHosts() {
 	defer rb.wg.Done()
 	ticker := time.NewTicker(rb.chkInterval)
+	defer ticker.Stop()
 	for {
 		select {
 		case <-ticker.C:
 			rb.mu.RLock()
+			bad := make([]*url.URL, 0)
 			for _, host := range rb.hosts {
 				if !host.Healthy {
-					if ok := rb.chckFn(host.URL); ok {
-						rb.ch <- host.URL
-					}
+					bad = append(bad, host.URL)
 				}
 			}
 			rb.mu.RUnlock()
+
+			for _, u := range bad {
+				if !rb.chckFn(u) {
+					continue
+				}
+				select {
+				case rb.ch <- u:
+				case <-rb.done:
+					return
+				}
+			}
 		case <-rb.done:
 			return
 		}

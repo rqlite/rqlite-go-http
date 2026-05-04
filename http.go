@@ -517,6 +517,8 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -568,6 +570,8 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	if err != nil {
 		return nil, err
 	}
+	defer resp.Body.Close()
+
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
@@ -594,12 +598,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 // Backup requests a copy of the SQLite database from the node. opts may be nil, in which case
 // default options are used. The caller is responsible for closing the returned io.ReadCloser
 // when done with it.
-func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (rc io.ReadCloser, retError error) {
-	defer func() {
-		if retError != nil && rc != nil {
-			rc.Close()
-		}
-	}()
+func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (io.ReadCloser, error) {
 	reqParams, err := makeURLValues(opts)
 	if err != nil {
 		return nil, err
@@ -610,6 +609,7 @@ func (c *Client) Backup(ctx context.Context, opts *BackupOptions) (rc io.ReadClo
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
+		resp.Body.Close()
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 	return resp.Body, nil
@@ -625,31 +625,52 @@ func (c *Client) Load(ctx context.Context, r io.Reader, opts *LoadOptions) error
 	}
 
 	first13 := make([]byte, 13)
-	_, err = r.Read(first13)
+	n, err := io.ReadFull(r, first13)
+	if err != nil && err != io.EOF && err != io.ErrUnexpectedEOF {
+		return err
+	}
+	prefix := first13[:n]
+
+	var resp *http.Response
+	if validSQLiteData(prefix) {
+		resp, err = c.doOctetStreamPostRequest(ctx, loadPath, params, io.MultiReader(bytes.NewReader(prefix), r))
+	} else {
+		resp, err = c.doPlainPostRequest(ctx, loadPath, params, io.MultiReader(bytes.NewReader(prefix), r))
+	}
 	if err != nil {
 		return err
 	}
-
-	if validSQLiteData(first13) {
-		_, err = c.doOctetStreamPostRequest(ctx, loadPath, params, io.MultiReader(bytes.NewReader(first13), r))
-	} else {
-		_, err = c.doPlainPostRequest(ctx, loadPath, params, io.MultiReader(bytes.NewReader(first13), r))
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, body)
 	}
-	return err
+	return nil
 }
 
 // Boot streams a raw SQLite file into a single-node system, effectively initializing
 // the underlying SQLite database from scratch. It is an error to call this on anything
 // but a single-node system.
 func (c *Client) Boot(ctx context.Context, r io.Reader) error {
-	_, err := c.doOctetStreamPostRequest(ctx, bootPath, nil, r)
-	return err
+	resp, err := c.doOctetStreamPostRequest(ctx, bootPath, nil, r)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, body)
+	}
+	return nil
 }
 
 // RemoveNode removes a node from the cluster. The node is identified by its ID.
 func (c *Client) RemoveNode(ctx context.Context, id string) error {
-	body := fmt.Sprintf(`{"id":"%s"}`, id)
-	resp, err := c.doRequest(ctx, "DELETE", removePath, "application/json", nil, bytes.NewReader([]byte(body)))
+	body, err := json.Marshal(map[string]string{"id": id})
+	if err != nil {
+		return err
+	}
+	resp, err := c.doRequest(ctx, "DELETE", removePath, "application/json", nil, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -739,7 +760,7 @@ func (c *Client) Ready(ctx context.Context, opts *ReadyOptions) ([]byte, error) 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("unexpected status code: %d, body: %s", resp.StatusCode, string(b))
 	}
-	return b, err
+	return b, nil
 }
 
 // Version returns the version of software running on the node.
@@ -795,7 +816,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		baseURL, err := c.lb.Next()
 		if err != nil {
 			if lastErr != nil {
-				return nil, fmt.Errorf("%w:%v", ErrNoHostsAvailable, lastErr)
+				return nil, fmt.Errorf("%w: %v", ErrNoHostsAvailable, lastErr)
 			}
 			return nil, err
 		}
@@ -803,7 +824,6 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		currValues := fullURL.Query()
 		maps.Copy(currValues, values)
 		fullURL.RawQuery = currValues.Encode()
-		c.addUserinfoToURL(fullURL)
 
 		var reqBody io.Reader
 		if bodyBytes != nil {
@@ -816,6 +836,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		if contentType != "" {
 			req.Header.Set("Content-Type", contentType)
 		}
+		c.applyBasicAuth(req)
 
 		resp, err := c.httpClient.Do(req)
 		if err == nil {
@@ -831,11 +852,11 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 	}
 }
 
-func (c *Client) addUserinfoToURL(u *url.URL) {
+func (c *Client) applyBasicAuth(req *http.Request) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.basicAuthUser != "" || c.basicAuthPass != "" {
-		u.User = url.UserPassword(c.basicAuthUser, c.basicAuthPass)
+		req.SetBasicAuth(c.basicAuthUser, c.basicAuthPass)
 	}
 }
 
