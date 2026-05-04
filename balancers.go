@@ -69,6 +69,8 @@ type RandomBalancer struct {
 
 	wg   sync.WaitGroup
 	done chan struct{}
+
+	closeOnce sync.Once
 }
 
 // Hosts is a slice of host URLs used by balancers to track host state.
@@ -198,7 +200,7 @@ func (rrb *RoundRobinBalancer) checkBadHosts() {
 					continue
 				}
 				rrb.mu.Lock()
-				if rrb.badHosts.RemoveURL(host) && !rrb.badHosts.ContainsURL(host) {
+				if rrb.badHosts.RemoveURL(host) && !rrb.goodHosts.ContainsURL(host) {
 					rrb.goodHosts = append(rrb.goodHosts, host)
 				}
 				rrb.mu.Unlock()
@@ -314,8 +316,10 @@ func (rb *RandomBalancer) Bad() []*url.URL {
 
 // Close closes the RandomBalancer. A closed RandomBalancer should not be reused.
 func (rb *RandomBalancer) Close() {
-	close(rb.done)
-	rb.wg.Wait()
+	rb.closeOnce.Do(func() {
+		close(rb.done)
+		rb.wg.Wait()
+	})
 }
 
 // checkBadHosts periodically checks unhealthy hosts and queues hosts that have
@@ -360,11 +364,8 @@ func (rb *RandomBalancer) markGoodHosts() {
 		select {
 		case u := <-rb.ch:
 			rb.mu.Lock()
-			for _, host := range rb.hosts {
-				if host.URL == u {
-					host.Healthy = true
-					break
-				}
+			if host, ok := rb.hosts[u.String()]; ok {
+				host.Healthy = true
 			}
 			rb.mu.Unlock()
 		case <-rb.done:

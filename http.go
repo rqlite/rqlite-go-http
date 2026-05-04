@@ -28,66 +28,62 @@ func DefaultHTTPClient() *http.Client {
 // skipping server certificate verification. The client's timeout is
 // set as 5 seconds.
 func NewHTTPTLSClientInsecure() (*http.Client, error) {
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{
-				InsecureSkipVerify: true,
-			},
-		},
-		Timeout: 5 * time.Second,
-	}, nil
+	return tlsClient(&tls.Config{
+		MinVersion:         tls.VersionTLS12,
+		InsecureSkipVerify: true,
+	}), nil
 }
 
 // NewHTTPTLSClient returns an HTTP client configured for simple TLS, using the
 // provided CA certificate.
 func NewHTTPTLSClient(caCertPath string) (*http.Client, error) {
-	config := &tls.Config{}
-
-	asn1Data, err := os.ReadFile(caCertPath)
+	pool, err := loadCertPool(caCertPath)
 	if err != nil {
 		return nil, err
 	}
-	config.RootCAs = x509.NewCertPool()
-	ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-	if !ok {
-		return nil, fmt.Errorf("failed to append CA certs from PEM")
-	}
-
-	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: config,
-		},
-		Timeout: 5 * time.Second,
-	}, nil
+	return tlsClient(&tls.Config{
+		MinVersion: tls.VersionTLS12,
+		RootCAs:    pool,
+	}), nil
 }
 
 // NewHTTPMutualTLSClient returns an HTTP client configured for mutual TLS.
 // It accepts paths for the client cert, client key, and trusted CA.
 func NewHTTPMutualTLSClient(clientCertPath, clientKeyPath, caCertPath string) (*http.Client, error) {
-	config := &tls.Config{}
-
-	asn1Data, err := os.ReadFile(caCertPath)
+	pool, err := loadCertPool(caCertPath)
 	if err != nil {
 		return nil, err
 	}
-	config.RootCAs = x509.NewCertPool()
-	ok := config.RootCAs.AppendCertsFromPEM(asn1Data)
-	if !ok {
-		return nil, fmt.Errorf("failed to append CA certs from PEM")
-	}
-
 	cert, err := tls.LoadX509KeyPair(clientCertPath, clientKeyPath)
 	if err != nil {
 		return nil, err
 	}
-	config.Certificates = []tls.Certificate{cert}
+	return tlsClient(&tls.Config{
+		MinVersion:   tls.VersionTLS12,
+		RootCAs:      pool,
+		Certificates: []tls.Certificate{cert},
+	}), nil
+}
 
+func loadCertPool(caCertPath string) (*x509.CertPool, error) {
+	asn1Data, err := os.ReadFile(caCertPath)
+	if err != nil {
+		return nil, err
+	}
+	pool := x509.NewCertPool()
+	if !pool.AppendCertsFromPEM(asn1Data) {
+		return nil, fmt.Errorf("failed to append CA certs from PEM")
+	}
+	return pool, nil
+}
+
+func tlsClient(cfg *tls.Config) *http.Client {
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = cfg
 	return &http.Client{
-		Transport: &http.Transport{
-			TLSClientConfig: config,
-		},
-		Timeout: 5 * time.Second,
-	}, nil
+		Transport: transport,
+		Timeout:   5 * time.Second,
+	}
 }
 
 // ExecuteResponse represents the JSON returned by /db/execute.
@@ -196,39 +192,20 @@ func (qr *QueryResponse) GetQueryResultsAssoc() []QueryResultAssoc {
 
 // UnmarshalJSON implements the json.Unmarshaler interface for QueryResponse.
 func (qr *QueryResponse) UnmarshalJSON(data []byte) error {
-	// Define an alias to avoid recursion.
 	type Alias QueryResponse
 	aux := &struct {
 		Results json.RawMessage `json:"results"`
 		*Alias
-	}{
-		Alias: (*Alias)(qr),
-	}
-
-	// Unmarshal into the auxiliary struct.
-	auxDec := json.NewDecoder(bytes.NewReader(data))
-	auxDec.UseNumber()
-	if err := auxDec.Decode(aux); err != nil {
+	}{Alias: (*Alias)(qr)}
+	if err := decodeUseNumber(data, aux); err != nil {
 		return err
 	}
-
-	var res []QueryResult
-	resDec := json.NewDecoder(bytes.NewReader(aux.Results))
-	resDec.UseNumber()
-	if err := resDec.Decode(&res); err == nil {
-		qr.Results = res
-		return nil
+	results, err := decodeResults[QueryResult, QueryResultAssoc](aux.Results)
+	if err != nil {
+		return err
 	}
-
-	var resAssoc []QueryResultAssoc
-	resAssocDec := json.NewDecoder(bytes.NewReader(aux.Results))
-	resAssocDec.UseNumber()
-	if err := resAssocDec.Decode(&resAssoc); err == nil {
-		qr.Results = resAssoc
-		return nil
-	}
-
-	return fmt.Errorf("unable to unmarshal results into either []QueryResult or []QueryResultAssoc")
+	qr.Results = results
+	return nil
 }
 
 // RequestResponse represents the JSON returned by /db/request.
@@ -305,39 +282,44 @@ func (rr *RequestResponse) HasError() (bool, int, string) {
 
 // UnmarshalJSON implements the json.Unmarshaler interface for RequestResponse.
 func (rr *RequestResponse) UnmarshalJSON(data []byte) error {
-	// Define an alias to avoid recursion.
 	type Alias RequestResponse
 	aux := &struct {
 		Results json.RawMessage `json:"results"`
 		*Alias
-	}{
-		Alias: (*Alias)(rr),
-	}
-
-	// Unmarshal into the auxiliary struct.
-	auxDec := json.NewDecoder(bytes.NewReader(data))
-	auxDec.UseNumber()
-	if err := auxDec.Decode(aux); err != nil {
+	}{Alias: (*Alias)(rr)}
+	if err := decodeUseNumber(data, aux); err != nil {
 		return err
 	}
-
-	var res []RequestResult
-	resDec := json.NewDecoder(bytes.NewReader(aux.Results))
-	resDec.UseNumber()
-	if err := resDec.Decode(&res); err == nil {
-		rr.Results = res
-		return nil
+	results, err := decodeResults[RequestResult, RequestResultAssoc](aux.Results)
+	if err != nil {
+		return err
 	}
+	rr.Results = results
+	return nil
+}
 
-	var resAssoc []RequestResultAssoc
-	resAssocDec := json.NewDecoder(bytes.NewReader(aux.Results))
-	resAssocDec.UseNumber()
-	if err := resAssocDec.Decode(&resAssoc); err == nil {
-		rr.Results = resAssoc
-		return nil
+// decodeUseNumber JSON-decodes data into out using json.Number for numeric values.
+func decodeUseNumber(data []byte, out any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	return dec.Decode(out)
+}
+
+// decodeResults attempts to decode a results payload into either []Default or
+// []Assoc, in that order, returning the first that succeeds.
+func decodeResults[Default, Assoc any](data json.RawMessage) (any, error) {
+	if len(data) == 0 {
+		return nil, nil
 	}
-
-	return fmt.Errorf("unable to unmarshal results into either []RequestResult or []RequestResultAssoc")
+	var def []Default
+	if err := decodeUseNumber(data, &def); err == nil {
+		return def, nil
+	}
+	var assoc []Assoc
+	if err := decodeUseNumber(data, &assoc); err == nil {
+		return assoc, nil
+	}
+	return nil, fmt.Errorf("unable to unmarshal results into either []%T or []%T", *new(Default), *new(Assoc))
 }
 
 const (
@@ -450,7 +432,7 @@ func (c *Client) ExecuteSingle(ctx context.Context, statement string, args ...an
 
 // Execute executes one or more SQL statements (INSERT, UPDATE, DELETE) using /db/execute.
 // opts may be nil, in which case default options are used.
-func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (retEr *ExecuteResponse, retErr error) {
+func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *ExecuteOptions) (*ExecuteResponse, error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -482,6 +464,7 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 		return nil, err
 	}
 
+	var retErr error
 	if c.promoteErrors.Load() {
 		if f, i, msg := executeResp.HasError(); f {
 			retErr = fmt.Errorf("statement %d: %s", i, msg)
@@ -503,7 +486,7 @@ func (c *Client) QuerySingle(ctx context.Context, statement string, args ...any)
 
 // Query performs a read operation (SELECT) using /db/query. opts may be nil, in which case default
 // options are used.
-func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *QueryOptions) (retQr *QueryResponse, retErr error) {
+func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *QueryOptions) (*QueryResponse, error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -534,6 +517,7 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	if err := dec.Decode(&queryResponse); err != nil {
 		return nil, err
 	}
+	var retErr error
 	if c.promoteErrors.Load() {
 		if f, i, msg := queryResponse.HasError(); f {
 			retErr = fmt.Errorf("statement %d: %s", i, msg)
@@ -556,7 +540,7 @@ func (c *Client) RequestSingle(ctx context.Context, statement string, args ...an
 
 // Request sends both read and write statements in a single request using /db/request.
 // opts may be nil, in which case default options are used.
-func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (rr *RequestResponse, retErr error) {
+func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *RequestOptions) (*RequestResponse, error) {
 	body, err := statements.MarshalJSON()
 	if err != nil {
 		return nil, err
@@ -587,6 +571,7 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	if err := dec.Decode(&reqResp); err != nil {
 		return nil, err
 	}
+	var retErr error
 	if c.promoteErrors.Load() {
 		if f, i, msg := reqResp.HasError(); f {
 			retErr = fmt.Errorf("statement %d: %s", i, msg)
@@ -670,7 +655,7 @@ func (c *Client) RemoveNode(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	resp, err := c.doRequest(ctx, "DELETE", removePath, "application/json", nil, bytes.NewReader(body))
+	resp, err := c.doRequest(ctx, http.MethodDelete, removePath, "application/json", nil, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
@@ -786,31 +771,38 @@ func (c *Client) Close() error {
 }
 
 func (c *Client) doGetRequest(ctx context.Context, path string, values url.Values) (*http.Response, error) {
-	return c.doRequest(ctx, "GET", path, "", values, nil)
+	return c.doRequest(ctx, http.MethodGet, path, "", values, nil)
 }
 
 func (c *Client) doJSONPostRequest(ctx context.Context, path string, values url.Values, body io.Reader) (*http.Response, error) {
-	return c.doRequest(ctx, "POST", path, "application/json", values, body)
+	return c.doRequest(ctx, http.MethodPost, path, "application/json", values, body)
 }
 
 func (c *Client) doOctetStreamPostRequest(ctx context.Context, path string, values url.Values, body io.Reader) (*http.Response, error) {
-	return c.doRequest(ctx, "POST", path, "application/octet-stream", values, body)
+	return c.doRequest(ctx, http.MethodPost, path, "application/octet-stream", values, body)
 }
 
 func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url.Values, body io.Reader) (*http.Response, error) {
-	return c.doRequest(ctx, "POST", path, "text/plain", values, body)
+	return c.doRequest(ctx, http.MethodPost, path, "text/plain", values, body)
 }
 
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
+	marker, retryable := c.lb.(badHostMarker)
+
+	// If the balancer can replace a failing host we may need to retry, which
+	// means the body must be replayable. Otherwise stream it through directly
+	// so callers like Load/Boot don't have to fit the whole upload in memory.
 	var bodyBytes []byte
-	if body != nil {
+	if retryable && body != nil {
 		var err error
 		bodyBytes, err = io.ReadAll(body)
 		if err != nil {
 			return nil, err
 		}
+		body = nil
 	}
+
 	var lastErr error
 	for {
 		baseURL, err := c.lb.Next()
@@ -828,6 +820,8 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		var reqBody io.Reader
 		if bodyBytes != nil {
 			reqBody = bytes.NewReader(bodyBytes)
+		} else if body != nil {
+			reqBody = body
 		}
 		req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), reqBody)
 		if err != nil {
@@ -844,11 +838,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		}
 
 		lastErr = err
-		if marker, ok := c.lb.(badHostMarker); ok {
-			marker.MarkBad(baseURL)
-		} else {
+		if !retryable {
 			return nil, err
 		}
+		marker.MarkBad(baseURL)
 	}
 }
 

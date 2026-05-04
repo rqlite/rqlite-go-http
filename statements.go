@@ -98,6 +98,8 @@ func (s *SQLStatement) UnmarshalJSON(data []byte) error {
 // SQLStatements is a slice of SQLStatement.
 type SQLStatements []*SQLStatement
 
+// NewSQLStatementsFromStrings builds an SQLStatements from a slice of plain SQL
+// strings, with no parameters attached to any statement.
 func NewSQLStatementsFromStrings(stmts []string) SQLStatements {
 	s := make(SQLStatements, len(stmts))
 	for i, stmt := range stmts {
