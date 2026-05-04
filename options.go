@@ -21,7 +21,7 @@ type ReadConsistencyLevel int
 const (
 	// ReadConsistencyLevelUnknown indicates that no read consistency level has
 	// been specified.
-	ReadConsistencyLevelUnknown = iota
+	ReadConsistencyLevelUnknown ReadConsistencyLevel = iota
 
 	// ReadConsistencyLevelNone instructs the node to simply read its local SQLite database.
 	ReadConsistencyLevelNone

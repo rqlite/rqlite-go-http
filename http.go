@@ -346,8 +346,11 @@ type badHostMarker interface {
 	MarkBad(*url.URL)
 }
 
+// LoadBalancerCloser is implemented by load balancers that need to release
+// resources (e.g. background health-check goroutines) when they are no longer
+// in use.
 type LoadBalancerCloser interface {
-	Close()
+	Close() error
 }
 
 // Client is the main type through which rqlite is accessed.
@@ -765,7 +768,7 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 // Close closes the client and should be called when the client is no longer needed.
 func (c *Client) Close() error {
 	if closer, ok := c.lb.(LoadBalancerCloser); ok {
-		closer.Close()
+		return closer.Close()
 	}
 	return nil
 }
