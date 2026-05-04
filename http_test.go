@@ -1181,3 +1181,105 @@ func Test_Client_RetriesBadHost(t *testing.T) {
 		t.Fatalf("expected 1 bad host, got %d", len(lb.Bad()))
 	}
 }
+
+// countingReader counts how many bytes have been read so far.
+type countingReader struct {
+	r io.Reader
+	n atomic.Int64
+}
+
+func (c *countingReader) Read(p []byte) (int, error) {
+	n, err := c.r.Read(p)
+	c.n.Add(int64(n))
+	return n, err
+}
+
+// Test_Load_StreamsBody verifies that with a non-retrying balancer the body is
+// streamed (not buffered) into the request — the bytes the server sees are the
+// bytes the client has read.
+func Test_Load_StreamsBody(t *testing.T) {
+	const total = 64 * 1024
+	payload := bytes.Repeat([]byte("x"), total)
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		io.Copy(io.Discard, r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cr := &countingReader{r: bytes.NewReader(payload)}
+	if err := cl.Load(context.Background(), cr, nil); err != nil {
+		t.Fatal(err)
+	}
+	// 13 bytes are sniffed up front; everything after that should be streamed
+	// from the original reader rather than buffered ahead of time.
+	if got := cr.n.Load(); got != int64(total) {
+		t.Fatalf("expected reader to have produced %d bytes, got %d", total, got)
+	}
+}
+
+func Test_Load_NonOKStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = cl.Load(context.Background(), bytes.NewReader([]byte("CREATE TABLE t (x int)")), nil)
+	if err == nil {
+		t.Fatal("expected error for non-200 status")
+	}
+}
+
+func Test_Backup_NonOKStatus(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rc, err := cl.Backup(context.Background(), nil)
+	if err == nil {
+		rc.Close()
+		t.Fatal("expected error for non-200 status")
+	}
+	if rc != nil {
+		t.Fatal("expected nil ReadCloser on error")
+	}
+}
+
+func Test_RemoveNode_EscapesID(t *testing.T) {
+	var got []byte
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got, _ = io.ReadAll(r.Body)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cl, err := NewClient(server.URL, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := `weird"id\with-stuff`
+	if err := cl.RemoveNode(context.Background(), id); err != nil {
+		t.Fatal(err)
+	}
+	var parsed map[string]string
+	if err := json.Unmarshal(got, &parsed); err != nil {
+		t.Fatalf("body was not valid JSON: %v (body=%q)", err, got)
+	}
+	if parsed["id"] != id {
+		t.Fatalf("id round-trip failed: want %q, got %q", id, parsed["id"])
+	}
+}

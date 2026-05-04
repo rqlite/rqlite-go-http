@@ -31,7 +31,7 @@ const (
 	ReadConsistencyLevelWeak
 
 	// ReadConsistencyLevelStrong sends the query through the Raft consensus system. It is not
-	// recommened for Production systems
+	// recommended for Production systems.
 	ReadConsistencyLevelStrong
 
 	// ReadConsistencyLevelLinearizable instructs the node to perform a linearizable read,
