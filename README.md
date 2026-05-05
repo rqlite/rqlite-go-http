@@ -34,6 +34,7 @@ package main
 import (
 	"context"
 	"fmt"
+    "log"
 
 	rqlitehttp "github.com/rqlite/rqlite-go-http"
 )
@@ -42,7 +43,7 @@ func main() {
 	// Create a client pointing to a rqlite node
 	client, err := rqlitehttp.NewClient("http://localhost:4001", nil)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Optionally set Basic Auth
@@ -51,7 +52,7 @@ func main() {
 	// Create a table.
 	resp, err := client.ExecuteSingle(context.Background(), "CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Insert a record.
@@ -65,14 +66,14 @@ func main() {
 		},
 	)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	fmt.Printf("ExecuteResponse: %+v\n", resp)
 
 	// Query the newly created table
 	qResp, err := client.QuerySingle(context.Background(), "SELECT * FROM foo")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	fmt.Printf("QueryResponse: %+v\n", qResp)
 }
