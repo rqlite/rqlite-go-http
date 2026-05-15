@@ -79,6 +79,70 @@ func main() {
 }
 ```
 
+## database/sql driver
+
+The `stdlib/rqlite` package registers rqlite as a [`database/sql`](https://pkg.go.dev/database/sql) driver, allowing you to use the standard Go database interface.
+
+This driver supports buffered write-only transactions.
+Running a read query where rows are expected to be returned during a transaction will immediately fail with an error.
+Buffering means all queries will be executed on `Commit()` in a single batch and all errors will be returned by it as a single error value.
+Rolling back transactions is effectively no-op as nothing will be executed until `Commit()` is called.
+
+Said limitation can be relaxed by enabling `AllowQueryInTxn` driver flag but these will be executed out-of-band outside the transaction not reflecting any state that would be modified by it.
+
+For extended configuration, import `stdlib` directly and register your own `stdlib.Driver`.
+
+```Go
+package main
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "github.com/rqlite/rqlite-go-http/stdlib/rqlite"
+)
+
+func main() {
+	db, err := sql.Open("rqlite", "http://localhost:4001")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	if _, err := db.Exec("CREATE TABLE foo (id INTEGER PRIMARY KEY, name TEXT)"); err != nil {
+		log.Fatal(err)
+	}
+
+	if _, err := db.Exec("INSERT INTO foo(name) VALUES(?)", "fiona"); err != nil {
+		log.Fatal(err)
+	}
+
+	var name string
+	if err := db.QueryRow("SELECT name FROM foo WHERE id = 1").Scan(&name); err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(name)
+
+	rows, err := db.Query("SELECT id, name FROM foo")
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int
+		var n string
+		if err := rows.Scan(&id, &n); err != nil {
+			log.Fatal(err)
+		}
+		fmt.Printf("%d: %s\n", id, n)
+	}
+	if err := rows.Err(); err != nil {
+		log.Fatal(err)
+	}
+}
+```
+
 ## Handling numbers
 When handling a JSON response from rqlite which a number, this library stores it as a [`json.Number`](https://pkg.go.dev/encoding/json#Number). This avoids precision loss. You can then convert it to the type your schema expects. For example, if you expect an `int64`:
 
