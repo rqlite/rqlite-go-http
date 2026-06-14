@@ -94,6 +94,7 @@ type RoundRobinBalancer struct {
 	closeOnce sync.Once
 }
 
+// DefaultHostChecker adds a default function for health checks when none is provided
 func DefaultHostChecker(u *url.URL) bool{
 	if u==nil{
 		return false
