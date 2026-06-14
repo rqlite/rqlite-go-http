@@ -4,6 +4,9 @@ import (
 	"errors"
 	"net/url"
 	"testing"
+	"sync/atomic"
+	"testing"
+	"time"
 )
 
 // -----Hosts Tests ----------

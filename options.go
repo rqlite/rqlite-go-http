@@ -21,7 +21,7 @@ type ReadConsistencyLevel int
 const (
 	// ReadConsistencyLevelUnknown indicates that no read consistency level has
 	// been specified.
-	ReadConsistencyLevelUnknown = iota
+	ReadConsistencyLevelUnknown ReadConsistencyLevel = iota
 
 	// ReadConsistencyLevelNone instructs the node to simply read its local SQLite database.
 	ReadConsistencyLevelNone
@@ -31,7 +31,7 @@ const (
 	ReadConsistencyLevelWeak
 
 	// ReadConsistencyLevelStrong sends the query through the Raft consensus system. It is not
-	// recommened for Production systems
+	// recommended for Production systems.
 	ReadConsistencyLevelStrong
 
 	// ReadConsistencyLevelLinearizable instructs the node to perform a linearizable read,
