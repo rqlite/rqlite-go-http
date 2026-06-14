@@ -768,7 +768,6 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 // Close closes the client and should be called when the client is no longer needed.
 func (c *Client) Close() error {
 	if closer, ok := c.lb.(LoadBalancerCloser); ok {
-		closer.Close()
 		return closer.Close()
 	}
 	return nil
@@ -792,20 +791,27 @@ func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url
 
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
+	marker, retryable := c.lb.(badHostMarker)
+
+	// If the balancer can replace a failing host we may need to retry, which
+	// means the body must be replayable. Otherwise stream it through directly
+	// so callers like Load/Boot don't have to fit the whole upload in memory.
 	var bodyBytes []byte
-	if body != nil {
+	if retryable && body != nil {
 		var err error
 		bodyBytes, err = io.ReadAll(body)
 		if err != nil {
 			return nil, err
 		}
+		body = nil
 	}
+
 	var lastErr error
 	for {
 		baseURL, err := c.lb.Next()
 		if err != nil {
 			if lastErr != nil {
-				return nil, fmt.Errorf("%w:%v", ErrNoHostsAvailable, lastErr)
+				return nil, fmt.Errorf("%w: %v", ErrNoHostsAvailable, lastErr)
 			}
 			return nil, err
 		}
@@ -813,11 +819,12 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		currValues := fullURL.Query()
 		maps.Copy(currValues, values)
 		fullURL.RawQuery = currValues.Encode()
-		c.addUserinfoToURL(fullURL)
 
 		var reqBody io.Reader
 		if bodyBytes != nil {
 			reqBody = bytes.NewReader(bodyBytes)
+		} else if body != nil {
+			reqBody = body
 		}
 		req, err := http.NewRequestWithContext(ctx, method, fullURL.String(), reqBody)
 		if err != nil {
@@ -826,6 +833,7 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		if contentType != "" {
 			req.Header.Set("Content-Type", contentType)
 		}
+		c.applyBasicAuth(req)
 
 		resp, err := c.httpClient.Do(req)
 		if err == nil {
@@ -833,11 +841,10 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		}
 
 		lastErr = err
-		if marker, ok := c.lb.(badHostMarker); ok {
-			marker.MarkBad(baseURL)
-		} else {
+		if !retryable {
 			return nil, err
 		}
+		marker.MarkBad(baseURL)
 	}
 }
 

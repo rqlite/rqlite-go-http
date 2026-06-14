@@ -3,11 +3,11 @@ package http
 import (
 	"errors"
 	"math/rand/v2"
+	"net/http"
 	"net/url"
+	"path"
 	"sync"
 	"time"
-	"net/http"
-	"path"
 )
 
 var (
@@ -96,11 +96,35 @@ type RoundRobinBalancer struct {
 	closeOnce sync.Once
 }
 
+// DefaultHostChecker checks a host's /readyz endpoint.
+func DefaultHostChecker(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+
+	checkURL := *u
+	checkURL.User = nil
+	checkURL.Path = path.Join(checkURL.Path, readyPath)
+	checkURL.RawQuery = ""
+	checkURL.Fragment = ""
+
+	resp, err := DefaultHTTPClient().Get(checkURL.String())
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
+}
+
 // NewRoundRobinBalancer returns a RoundRobinBalancer initialized with the
 // supplied URLs, health checker, and check interval.
 func NewRoundRobinBalancer(urls []string, chckFn HostChecker, d time.Duration) (*RoundRobinBalancer, error) {
 	if len(urls) == 0 {
 		return nil, ErrNoURLSupplied
+	}
+	if chckFn == nil {
+		chckFn = DefaultHostChecker
 	}
 	goodHosts := make(Hosts, 0, len(urls))
 	for _, s := range urls {
@@ -236,190 +260,6 @@ func (h *Hosts) RemoveURL(target *url.URL) bool {
 		copy((*h)[i:], (*h)[i+1:])
 		(*h)[len(*h)-1] = nil
 		*h = (*h)[:len(*h)-1]
-		return true
-	}
-	return false
-}
-
-// Hosts is a slice of host URLs used by balancers to track host state.
-type Hosts []*url.URL
-
-// RoundRobinBalancer cycles through healthy hosts in order and can
-// optionally restore bad hosts after health checks succeed.
-type RoundRobinBalancer struct {
-	mu        sync.RWMutex
-	goodHosts Hosts
-	badHosts  Hosts
-	next      uint64
-
-	chckInterval time.Duration
-	chckFn       HostChecker
-	ch           chan *url.URL
-
-	wg   sync.WaitGroup
-	done chan struct{}
-
-	closeOnce sync.Once
-}
-
-// DefaultHostChecker adds a default function for health checks when none is provided
-func DefaultHostChecker(u *url.URL) bool{
-	if u==nil{
-		return false
-	}
-
-	checkURL := *u
-	checkURL.User =nil
-	checkURL.Path = path.Join(checkURL.Path,readyPath)
-	checkURL.RawQuery = ""
-	checkURL.Fragment = ""
-
-	resp,err := DefaultHTTPClient().Get(checkURL.String())
-	if err!=nil{
-		return false
-	}
-	defer resp.Body.Close()
-
-	return resp.StatusCode == http.StatusOK
-}
-// NewRoundRobinBalancer returns a RoundRobinBalancer initialized with the
-// supplied URLs, health checker, and check interval.
-func NewRoundRobinBalancer(urls []string, chckFn HostChecker, d time.Duration) (*RoundRobinBalancer, error) {
-	if len(urls) == 0 {
-		return nil, ErrNoURLSupplied
-	}
-	if chckFn == nil {
-		chckFn = DefaultHostChecker
-	}
-	goodHosts := make(Hosts, 0, len(urls))
-	for _, s := range urls {
-		u, err := url.Parse(s)
-		if err != nil {
-			return nil, err
-		}
-		if goodHosts.ContainsURL(u) {
-			return nil, ErrDuplicateAddresses
-		}
-		goodHosts = append(goodHosts, u)
-	}
-
-	rrb := &RoundRobinBalancer{
-		goodHosts:    goodHosts,
-		chckInterval: d,
-		chckFn:       chckFn,
-		done:         make(chan struct{}),
-	}
-	if d > 0 {
-		rrb.wg.Go(rrb.checkBadHosts)
-	}
-	return rrb, nil
-}
-
-// Next returns next available healthy Node in Round-Robin Order
-func (rrb *RoundRobinBalancer) Next() (*url.URL, error) {
-	rrb.mu.Lock()
-	defer rrb.mu.Unlock()
-
-	if len(rrb.goodHosts) == 0 {
-		return nil, ErrNoHostsAvailable
-	}
-
-	idx := (rrb.next) % uint64(len(rrb.goodHosts))
-	rrb.next++
-	return rrb.goodHosts[idx], nil
-}
-
-// MarkBad moves a healthy host to the bad host list so it is skipped until it
-// passes health checking again.
-func (rrb *RoundRobinBalancer) MarkBad(u *url.URL) {
-	rrb.mu.Lock()
-	defer rrb.mu.Unlock()
-
-	for i, host := range rrb.goodHosts {
-		if host.String() != u.String() {
-			continue
-		}
-
-		rrb.goodHosts = append(rrb.goodHosts[:i], rrb.goodHosts[i+1:]...)
-		if !rrb.badHosts.ContainsURL(host) {
-			rrb.badHosts = append(rrb.badHosts, host)
-		}
-		break
-	}
-}
-
-// Healthy returns the currently healthy hosts
-func (rrb *RoundRobinBalancer) Healthy() []*url.URL {
-	rrb.mu.RLock()
-	defer rrb.mu.RUnlock()
-	healthy := make([]*url.URL, len(rrb.goodHosts))
-	copy(healthy, rrb.goodHosts)
-	return healthy
-}
-
-// Bad returns current bad hosts
-func (rrb *RoundRobinBalancer) Bad() []*url.URL {
-	rrb.mu.RLock()
-	defer rrb.mu.RUnlock()
-	bad := make([]*url.URL, len(rrb.badHosts))
-	copy(bad, rrb.badHosts)
-	return bad
-}
-
-// Close stops the balancer's background health checker
-func (rrb *RoundRobinBalancer) Close() {
-	rrb.closeOnce.Do(func() {
-		close(rrb.done)
-		rrb.wg.Wait()
-	})
-}
-
-// checkBadHosts periodically checks bad hosts and restores healthy ones to the
-// round-robin pool.
-func (rrb *RoundRobinBalancer) checkBadHosts() {
-	ticker := time.NewTicker(rrb.chckInterval)
-	defer ticker.Stop()
-	for {
-		select {
-		case <-ticker.C:
-			rrb.mu.RLock()
-			bad := make([]*url.URL, len(rrb.badHosts))
-			copy(bad, rrb.badHosts)
-			rrb.mu.RUnlock()
-			for _, host := range bad {
-				if !rrb.chckFn(host) {
-					continue
-				}
-				rrb.mu.Lock()
-				if rrb.badHosts.RemoveURL(host) && !rrb.badHosts.ContainsURL(host) {
-					rrb.goodHosts = append(rrb.goodHosts, host)
-				}
-				rrb.mu.Unlock()
-			}
-		case <-rrb.done:
-			return
-		}
-	}
-}
-
-// ContainsURL reports whether the host list contains the target URL.
-func (h Hosts) ContainsURL(target *url.URL) bool {
-	for _, u := range h {
-		if u.String() == target.String() {
-			return true
-		}
-	}
-	return false
-}
-
-// RemoveURL removes the target URL from the host list and reports whether it
-// was found.
-func (h *Hosts) RemoveURL(target *url.URL) bool {
-	for i, u := range *h {
-		if u.String() != target.String() {
-			continue
-		}
-		*h = append((*h)[:i], (*h)[i+1:]...)
 		return true
 	}
 	return false
