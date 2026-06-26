@@ -3,7 +3,9 @@ package http
 import (
 	"errors"
 	"math/rand/v2"
+	"net/http"
 	"net/url"
+	"path"
 	"sync"
 	"time"
 )
@@ -94,11 +96,35 @@ type RoundRobinBalancer struct {
 	closeOnce sync.Once
 }
 
+// DefaultHostChecker checks a host's /readyz endpoint.
+func DefaultHostChecker(u *url.URL) bool {
+	if u == nil {
+		return false
+	}
+
+	checkURL := *u
+	checkURL.User = nil
+	checkURL.Path = path.Join(checkURL.Path, readyPath)
+	checkURL.RawQuery = ""
+	checkURL.Fragment = ""
+
+	resp, err := DefaultHTTPClient().Get(checkURL.String())
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	return resp.StatusCode == http.StatusOK
+}
+
 // NewRoundRobinBalancer returns a RoundRobinBalancer initialized with the
 // supplied URLs, health checker, and check interval.
 func NewRoundRobinBalancer(urls []string, chckFn HostChecker, d time.Duration) (*RoundRobinBalancer, error) {
 	if len(urls) == 0 {
 		return nil, ErrNoURLSupplied
+	}
+	if chckFn == nil {
+		chckFn = DefaultHostChecker
 	}
 	goodHosts := make(Hosts, 0, len(urls))
 	for _, s := range urls {
