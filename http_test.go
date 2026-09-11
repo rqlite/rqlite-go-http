@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"os"
 	"reflect"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -1179,6 +1181,106 @@ func Test_Client_RetriesBadHost(t *testing.T) {
 
 	if len(lb.Bad()) != 1 {
 		t.Fatalf("expected 1 bad host, got %d", len(lb.Bad()))
+	}
+}
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func Test_Client_RetrySafety(t *testing.T) {
+	for _, tc := range []struct {
+		name, method, path string
+		retry              bool
+	}{
+		{"execute", http.MethodPost, executePath, false},
+		{"request", http.MethodPost, requestPath, false},
+		{"load", http.MethodPost, loadPath, false},
+		{"boot", http.MethodPost, bootPath, false},
+		{"remove", http.MethodDelete, removePath, false},
+		{"query", http.MethodPost, queryPath, true},
+		{"status", http.MethodGet, statusPath, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			lb, err := NewRoundRobinBalancer([]string{"http://first", "http://second"}, nil, 0)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer lb.Close()
+			calls := 0
+			lostResponse := errors.New("response lost after request was processed")
+			client, err := NewClientWithLoadBalancer(lb, &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				if r.Body != nil {
+					body, _ := io.ReadAll(r.Body)
+					if string(body) != "body" {
+						t.Errorf("body = %q", body)
+					}
+				}
+				if calls == 1 {
+					return nil, lostResponse
+				}
+				return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header)}, nil
+			})})
+			if err != nil {
+				t.Fatal(err)
+			}
+			resp, err := client.doRequest(context.Background(), tc.method, tc.path, "", nil, strings.NewReader("body"))
+			if resp != nil {
+				resp.Body.Close()
+			}
+			if tc.retry {
+				if err != nil || calls != 2 {
+					t.Fatalf("calls=%d error=%v", calls, err)
+				}
+			} else if !errors.Is(err, lostResponse) || calls != 1 {
+				t.Fatalf("write replayed or error lost: calls=%d error=%v", calls, err)
+			}
+		})
+	}
+}
+
+func Test_Client_CancellationPreservesHosts(t *testing.T) {
+	for _, before := range []bool{true, false} {
+		t.Run(map[bool]string{true: "before request", false: "during request"}[before], func(t *testing.T) {
+			lb, _ := NewRoundRobinBalancer([]string{"http://first", "http://second"}, nil, 0)
+			defer lb.Close()
+			ctx, cancel := context.WithCancel(context.Background())
+			defer cancel()
+			calls := 0
+			client, _ := NewClientWithLoadBalancer(lb, &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				calls++
+				cancel()
+				return nil, r.Context().Err()
+			})})
+			if before {
+				cancel()
+			}
+			_, err := client.Status(ctx)
+			if !errors.Is(err, context.Canceled) || len(lb.Bad()) != 0 {
+				t.Fatalf("error=%v bad hosts=%v", err, lb.Bad())
+			}
+			want := 1
+			if before {
+				want = 0
+			}
+			if calls != want {
+				t.Fatalf("calls=%d want=%d", calls, want)
+			}
+		})
+	}
+}
+
+func Test_Client_RetryExhaustionPreservesError(t *testing.T) {
+	lb, _ := NewRoundRobinBalancer([]string{"http://first", "http://second"}, nil, 0)
+	defer lb.Close()
+	cause := errors.New("transport failure")
+	client, _ := NewClientWithLoadBalancer(lb, &http.Client{Transport: roundTripFunc(func(*http.Request) (*http.Response, error) {
+		return nil, cause
+	})})
+	_, err := client.Status(context.Background())
+	if !errors.Is(err, ErrNoHostsAvailable) || !errors.Is(err, cause) {
+		t.Fatalf("error chain lost: %v", err)
 	}
 }
 

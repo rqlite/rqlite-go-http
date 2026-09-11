@@ -256,3 +256,16 @@ func Test_RaftIndexOptions(t *testing.T) {
 		}
 	})
 }
+
+func Test_SQLTimeoutOptions(t *testing.T) {
+	for _, opts := range []any{
+		&ExecuteOptions{Timeout: time.Second, DBTimeout: 2 * time.Second},
+		&QueryOptions{Timeout: time.Second, DBTimeout: 2 * time.Second},
+		&RequestOptions{Timeout: time.Second, DBTimeout: 2 * time.Second},
+	} {
+		values, err := makeURLValues(opts)
+		if err != nil || values.Get("timeout") != "1s" || values.Get("db_timeout") != "2s" {
+			t.Fatalf("%T: values=%v error=%v", opts, values, err)
+		}
+	}
+}

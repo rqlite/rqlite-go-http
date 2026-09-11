@@ -106,9 +106,12 @@ type ExecuteOptions struct {
 	// always waits until the request has been applied to the database.
 	Wait bool `uvalue:"wait,omitempty"`
 
-	// Timeout after which if Wait is set, the system should respond with an error if
-	// the request has not been persisted.
+	// Timeout limits request forwarding and, when Wait is set, waiting for a
+	// queued request to be persisted.
 	Timeout time.Duration `uvalue:"timeout,omitempty"`
+
+	// DBTimeout limits SQL execution at the database level.
+	DBTimeout time.Duration `uvalue:"db_timeout,omitempty"`
 
 	// RaftIndex requests that the Raft log index be included in the response.
 	RaftIndex bool `uvalue:"raft_index,omitempty"`
@@ -116,8 +119,11 @@ type ExecuteOptions struct {
 
 // QueryOptions holds optional settings for /db/query requests.
 type QueryOptions struct {
-	// Timeout is applied at the database level.
+	// Timeout limits request forwarding.
 	Timeout time.Duration `uvalue:"timeout,omitempty"`
+
+	// DBTimeout limits SQL execution at the database level.
+	DBTimeout time.Duration `uvalue:"db_timeout,omitempty"`
 
 	// Pretty controls whether pretty-printed JSON should be returned.
 	Pretty bool `uvalue:"pretty,omitempty"`
@@ -146,7 +152,10 @@ type RequestOptions struct {
 	// Transaction indicates whether statements should be enclosed in a transaction.
 	Transaction bool `uvalue:"transaction,omitempty"`
 
-	// Timeout is applied at the database level.
+	// DBTimeout limits SQL execution at the database level.
+	DBTimeout time.Duration `uvalue:"db_timeout,omitempty"`
+
+	// Timeout limits request forwarding.
 	Timeout     time.Duration `uvalue:"timeout,omitempty"`
 	Pretty      bool          `uvalue:"pretty,omitempty"`
 	Timings     bool          `uvalue:"timings,omitempty"`
