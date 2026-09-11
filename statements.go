@@ -40,7 +40,11 @@ func NewSQLStatement(stmt string, args ...any) (*SQLStatement, error) {
 func (s *SQLStatement) MarshalJSON() ([]byte, error) {
 	if len(s.NamedParams) > 0 {
 		// e.g. ["INSERT INTO foo(name, age) VALUES(:name, :age)", { "name": "...", "age": ... }]
-		arr := []any{s.SQL, s.NamedParams}
+		params := make(map[string]any, len(s.NamedParams))
+		for name, value := range s.NamedParams {
+			params[name] = wireParameter(value)
+		}
+		arr := []any{s.SQL, params}
 		return json.Marshal(arr)
 	}
 
@@ -48,13 +52,31 @@ func (s *SQLStatement) MarshalJSON() ([]byte, error) {
 		// e.g. ["INSERT INTO foo(name, age) VALUES(?, ?)", "param1", 123, ...]
 		arr := make([]any, 1, 1+len(s.PositionalParams))
 		arr[0] = s.SQL
-		arr = append(arr, s.PositionalParams...)
+		for _, value := range s.PositionalParams {
+			arr = append(arr, wireParameter(value))
+		}
 		return json.Marshal(arr)
 	}
 
 	// No parameters => just return "SQL" as a JSON string.
 	// e.g. "CREATE TABLE foo (id INTEGER NOT NULL ...)"
 	return json.Marshal(s.SQL)
+}
+
+// wireParameter prevents encoding/json from turning BLOB parameters into
+// base64 text. rqlite accepts a JSON array of byte values as a BLOB.
+func wireParameter(value any) any {
+	if b, ok := value.([]byte); ok {
+		if b == nil {
+			return nil
+		}
+		values := make([]int, len(b))
+		for i, v := range b {
+			values[i] = int(v)
+		}
+		return values
+	}
+	return value
 }
 
 // UnmarshalJSON implements a custom JSON representation so that SQL statements

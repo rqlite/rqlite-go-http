@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -792,6 +793,12 @@ func (c *Client) doPlainPostRequest(ctx context.Context, path string, values url
 // doRequest builds and executes an HTTP request, returning the response.
 func (c *Client) doRequest(ctx context.Context, method, path string, contentType string, values url.Values, body io.Reader) (*http.Response, error) {
 	marker, retryable := c.lb.(badHostMarker)
+	// A lost response does not mean a write failed. Only replay requests that
+	// cannot modify the database; /db/request may contain writes too.
+	retryable = retryable && (method == http.MethodGet || path == queryPath)
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 
 	// If the balancer can replace a failing host we may need to retry, which
 	// means the body must be replayable. Otherwise stream it through directly
@@ -807,14 +814,23 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 	}
 
 	var lastErr error
+	attempted := make(map[string]bool)
 	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		baseURL, err := c.lb.Next()
 		if err != nil {
 			if lastErr != nil {
-				return nil, fmt.Errorf("%w: %v", ErrNoHostsAvailable, lastErr)
+				return nil, fmt.Errorf("%w: %w", err, lastErr)
 			}
 			return nil, err
 		}
+		// Bound retries even if a balancer restores a host during this call.
+		if attempted[baseURL.String()] {
+			return nil, fmt.Errorf("%w: %w", ErrNoHostsAvailable, lastErr)
+		}
+		attempted[baseURL.String()] = true
 		fullURL := baseURL.JoinPath(path)
 		currValues := fullURL.Query()
 		maps.Copy(currValues, values)
@@ -841,6 +857,12 @@ func (c *Client) doRequest(ctx context.Context, method, path string, contentType
 		}
 
 		lastErr = err
+		if ctx.Err() != nil {
+			return nil, ctx.Err()
+		}
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil, err
+		}
 		if !retryable {
 			return nil, err
 		}
