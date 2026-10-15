@@ -61,6 +61,17 @@ func (rcl ReadConsistencyLevel) String() string {
 	}
 }
 
+// Values for the Errors field of ExecuteOptions, QueryOptions and RequestOptions.
+// They correspond to the "errors" query parameter supported by rqlite v10.6.0
+// and later. Older versions ignore the parameter.
+const (
+	// ErrorFormatV1 requests only the legacy "error" string.
+	ErrorFormatV1 = "v1"
+
+	// ErrorFormatV2 requests only the structured "error_v2" object.
+	ErrorFormatV2 = "v2"
+)
+
 // BackupOptions holds optional parameters for a backup operation.
 type BackupOptions struct {
 	// Format can be "sql" if a SQL text dump is desired, otherwise an empty string
@@ -112,6 +123,11 @@ type ExecuteOptions struct {
 
 	// RaftIndex requests that the Raft log index be included in the response.
 	RaftIndex bool `uvalue:"raft_index,omitempty"`
+
+	// Errors selects which error fields rqlite renders for a failed statement.
+	// See ErrorFormatV1 and ErrorFormatV2. Leave empty to receive both forms.
+	// The client decodes every form, so this only affects response size.
+	Errors string `uvalue:"errors,omitempty"`
 }
 
 // QueryOptions holds optional settings for /db/query requests.
@@ -139,6 +155,11 @@ type QueryOptions struct {
 
 	// RaftIndex requests that the Raft log index be included in the response.
 	RaftIndex bool `uvalue:"raft_index,omitempty"`
+
+	// Errors selects which error fields rqlite renders for a failed statement.
+	// See ErrorFormatV1 and ErrorFormatV2. Leave empty to receive both forms.
+	// The client decodes every form, so this only affects response size.
+	Errors string `uvalue:"errors,omitempty"`
 }
 
 // RequestOptions holds optional settings for /db/request requests.
@@ -160,6 +181,11 @@ type RequestOptions struct {
 
 	// RaftIndex requests that the Raft log index be included in the response.
 	RaftIndex bool `uvalue:"raft_index,omitempty"`
+
+	// Errors selects which error fields rqlite renders for a failed statement.
+	// See ErrorFormatV1 and ErrorFormatV2. Leave empty to receive both forms.
+	// The client decodes every form, so this only affects response size.
+	Errors string `uvalue:"errors,omitempty"`
 }
 
 // NodeOptions holds optional settings for /nodes requests.
