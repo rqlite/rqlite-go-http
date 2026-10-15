@@ -174,3 +174,132 @@ func Test_EndToEnd_LoadBalancer(t *testing.T) {
 		t.Fatalf("Unexpected value")
 	}
 }
+
+// Test_EndToEnd_StatementErrors issues statements against a non-existent table
+// and checks that the resulting error is reported consistently under every
+// error format rqlite supports, with and without PromoteErrors.
+func Test_EndToEnd_StatementErrors(t *testing.T) {
+	host, ok := os.LookupEnv("RQLITE_GO_HTTP_E2E_HOST")
+	if !ok {
+		t.Skip("Skipping end-to-end test since no host is set")
+	}
+	ctx := context.Background()
+
+	client, err := NewClient(fmt.Sprintf("http://%s:4001", host), nil)
+	if err != nil {
+		t.Fatalf("Error creating client: %s", err)
+	}
+	defer client.Close()
+
+	for _, stmt := range []string{
+		"DROP TABLE IF EXISTS err_foo",
+		"CREATE TABLE err_foo (id INTEGER PRIMARY KEY, name TEXT)",
+	} {
+		resp, err := client.ExecuteSingle(ctx, stmt)
+		if err != nil {
+			t.Fatalf("Error executing %q: %s", stmt, err)
+		}
+		if err := resp.Err(); err != nil {
+			t.Fatalf("Error executing %q: %s", stmt, err)
+		}
+	}
+
+	const missing = "no such table: nonexistent"
+
+	// checkErr verifies that err reports the statement at index failing with
+	// the missing table error. SQLite codes are expected unless the legacy
+	// error format was requested, which carries only the message.
+	checkErr := func(t *testing.T, err error, index int, sqlite bool) {
+		t.Helper()
+		want := fmt.Sprintf("statement %d: %s", index, missing)
+		if err == nil || err.Error() != want {
+			t.Fatalf("Expected error %q, got %v", want, err)
+		}
+		var stmtErr *StatementError
+		if !errors.As(err, &stmtErr) {
+			t.Fatalf("Expected error to wrap a StatementError, got %T", err)
+		}
+		if stmtErr.Message != missing {
+			t.Fatalf("Expected message %q, got %q", missing, stmtErr.Message)
+		}
+		if !sqlite {
+			if stmtErr.SQLite != nil {
+				t.Fatalf("Expected no SQLite codes with legacy error format, got %+v", stmtErr.SQLite)
+			}
+			return
+		}
+		if stmtErr.SQLite == nil {
+			t.Fatalf("Expected SQLite error codes, got none")
+		}
+		if stmtErr.SQLite.Code != 1 || stmtErr.SQLite.ExtendedCode != 1 {
+			t.Fatalf("Unexpected SQLite error codes: %+v", stmtErr.SQLite)
+		}
+	}
+
+	// checkPromoted verifies the error returned by the client itself, which is
+	// nil unless errors are promoted.
+	checkPromoted := func(t *testing.T, err error, promote bool, index int, sqlite bool) {
+		t.Helper()
+		if !promote {
+			if err != nil {
+				t.Fatalf("Expected nil error without promotion, got %v", err)
+			}
+			return
+		}
+		checkErr(t, err, index, sqlite)
+	}
+
+	formats := []struct {
+		name   string
+		format string
+		sqlite bool
+	}{
+		{"default", "", true},
+		{"v1", ErrorFormatV1, false},
+		{"v2", ErrorFormatV2, true},
+	}
+
+	for _, f := range formats {
+		for _, promote := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/promote=%v", f.name, promote), func(t *testing.T) {
+				client.PromoteErrors(promote)
+
+				// Execute: a good statement followed by a bad one.
+				execResp, err := client.Execute(ctx, NewSQLStatementsFromStrings([]string{
+					`INSERT INTO err_foo(name) VALUES("fiona")`,
+					`INSERT INTO nonexistent(name) VALUES("fiona")`,
+				}), &ExecuteOptions{Errors: f.format})
+				checkPromoted(t, err, promote, 1, f.sqlite)
+				checkErr(t, execResp.Err(), 1, f.sqlite)
+				if len(execResp.Results) != 2 {
+					t.Fatalf("Expected 2 execute results, got %d", len(execResp.Results))
+				}
+				if execResp.Results[0].Error != nil {
+					t.Fatalf("Unexpected error on first execute result: %v", execResp.Results[0].Error)
+				}
+				if execResp.Results[1].Error == nil || execResp.Results[1].Error.Message != missing {
+					t.Fatalf("Unexpected error on second execute result: %v", execResp.Results[1].Error)
+				}
+
+				// Query: a bad statement, in both result forms.
+				for _, assoc := range []bool{false, true} {
+					queryResp, err := client.Query(ctx, NewSQLStatementsFromStrings([]string{
+						"SELECT * FROM nonexistent",
+					}), &QueryOptions{Errors: f.format, Associative: assoc})
+					checkPromoted(t, err, promote, 0, f.sqlite)
+					checkErr(t, queryResp.Err(), 0, f.sqlite)
+				}
+
+				// Request: a good read followed by a bad write, in both result forms.
+				for _, assoc := range []bool{false, true} {
+					reqResp, err := client.Request(ctx, NewSQLStatementsFromStrings([]string{
+						"SELECT COUNT(*) FROM err_foo",
+						`INSERT INTO nonexistent(name) VALUES("fiona")`,
+					}), &RequestOptions{Errors: f.format, Associative: assoc})
+					checkPromoted(t, err, promote, 1, f.sqlite)
+					checkErr(t, reqResp.Err(), 1, f.sqlite)
+				}
+			})
+		}
+	}
+}
