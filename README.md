@@ -111,7 +111,15 @@ if err := resp.Err(); err != nil {
 }
 ```
 
-Alternatively, call `client.PromoteErrors(true)` and the client will return the result of `Err()` alongside the response, so a single check covers both levels.
+Alternatively, call `client.PromoteErrors(true)` and the client will return the result of `Err()` alongside the response, so a single check covers both levels:
+
+```go
+client.PromoteErrors(true)
+resp, err := client.ExecuteSingle(ctx, "INSERT INTO foo(id) VALUES(1)")
+if err != nil { // Will be true for both HTTP-level errors and database-level failures.
+    log.Fatal(err) 
+}
+```
 
 A failed statement is reported as a `StatementError`, wrapped with the index of the statement that failed. Use `errors.As` to retrieve it. If the failure originated in SQLite, it also carries SQLite's [result codes](https://www.sqlite.org/rescode.html):
 
