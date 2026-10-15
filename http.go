@@ -87,6 +87,60 @@ func tlsClient(cfg *tls.Config) *http.Client {
 	}
 }
 
+// StatementError describes why a statement failed.
+//
+// It is the decoded form of the "error_v2" object returned by rqlite v10.6.0
+// and later. When the response comes from an older rqlite, or the legacy error
+// format was requested, only Message is set, taken from the "error" field.
+type StatementError struct {
+	// Message is the error message reported by rqlite.
+	Message string `json:"message"`
+
+	// SQLite holds the result codes reported by SQLite. It is nil if the failure
+	// did not originate in SQLite, for example a timeout.
+	SQLite *SQLiteError `json:"sqlite,omitempty"`
+}
+
+// Error implements the error interface.
+func (e *StatementError) Error() string {
+	return e.Message
+}
+
+// SQLiteError holds the result codes SQLite reported for a failed statement.
+// See https://www.sqlite.org/rescode.html for their meaning.
+type SQLiteError struct {
+	Code         int `json:"code,omitempty"`
+	ExtendedCode int `json:"extended_code,omitempty"`
+	SystemErrno  int `json:"system_errno,omitempty"`
+}
+
+// legacyError captures the deprecated "error" field of a statement result,
+// which rqlite sends before v10.6.0 or when the v1 error format is requested.
+// It is embedded alongside a result during decoding so both forms are read
+// in a single pass.
+type legacyError struct {
+	Message string `json:"error"`
+}
+
+// merge returns the structured error if present, otherwise an error built
+// from the legacy message, or nil if the statement succeeded.
+func (l legacyError) merge(structured *StatementError) *StatementError {
+	if structured != nil {
+		return structured
+	}
+	if l.Message != "" {
+		return &StatementError{Message: l.Message}
+	}
+	return nil
+}
+
+// statementError wraps the error of the statement at index i so that the
+// returned error names the statement, while errors.As still reaches the
+// underlying *StatementError.
+func statementError(i int, e *StatementError) error {
+	return fmt.Errorf("statement %d: %w", i, e)
+}
+
 // ExecuteResponse represents the JSON returned by /db/execute.
 type ExecuteResponse struct {
 	Results        []ExecuteResult `json:"results"`
@@ -98,13 +152,14 @@ type ExecuteResponse struct {
 
 // Err returns the first error in the response, or nil if the request and every
 // statement succeeded. A request-level error is returned as is. A statement-level
-// error names the index of the failed statement.
+// error is a *StatementError wrapped with the index of the failed statement, so
+// use errors.As to retrieve it.
 func (er *ExecuteResponse) Err() error {
 	if er.Error != "" {
 		return errors.New(er.Error)
 	}
 	for i, result := range er.Results {
-		if result.Error != "" {
+		if result.Error != nil {
 			return statementError(i, result.Error)
 		}
 	}
@@ -116,7 +171,24 @@ type ExecuteResult struct {
 	LastInsertID int64   `json:"last_insert_id"`
 	RowsAffected int64   `json:"rows_affected"`
 	Time         float64 `json:"time,omitempty"`
-	Error        string  `json:"error,omitempty"`
+
+	// Error is set if the statement failed.
+	Error *StatementError `json:"error_v2,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting both the legacy and
+// structured error fields.
+func (r *ExecuteResult) UnmarshalJSON(data []byte) error {
+	type Alias ExecuteResult
+	aux := struct {
+		*Alias
+		legacyError
+	}{Alias: (*Alias)(r)}
+	if err := decodeUseNumber(data, &aux); err != nil {
+		return err
+	}
+	r.Error = aux.merge(r.Error)
+	return nil
 }
 
 // QueryResults is a placeholder for either []QueryResult or []QueryResultAssoc.
@@ -141,7 +213,24 @@ type QueryResult struct {
 	Types   []string `json:"types"`
 	Values  [][]any  `json:"values"`
 	Time    float64  `json:"time,omitempty"`
-	Error   string   `json:"error,omitempty"`
+
+	// Error is set if the statement failed.
+	Error *StatementError `json:"error_v2,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting both the legacy and
+// structured error fields.
+func (r *QueryResult) UnmarshalJSON(data []byte) error {
+	type Alias QueryResult
+	aux := struct {
+		*Alias
+		legacyError
+	}{Alias: (*Alias)(r)}
+	if err := decodeUseNumber(data, &aux); err != nil {
+		return err
+	}
+	r.Error = aux.merge(r.Error)
+	return nil
 }
 
 // QueryResultAssoc is an element of QueryResponse.Results, but in an associative form.
@@ -150,12 +239,30 @@ type QueryResultAssoc struct {
 	Types map[string]string `json:"types"`
 	Rows  []map[string]any  `json:"rows"`
 	Time  float64           `json:"time,omitempty"`
-	Error string            `json:"error,omitempty"`
+
+	// Error is set if the statement failed.
+	Error *StatementError `json:"error_v2,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting both the legacy and
+// structured error fields.
+func (r *QueryResultAssoc) UnmarshalJSON(data []byte) error {
+	type Alias QueryResultAssoc
+	aux := struct {
+		*Alias
+		legacyError
+	}{Alias: (*Alias)(r)}
+	if err := decodeUseNumber(data, &aux); err != nil {
+		return err
+	}
+	r.Error = aux.merge(r.Error)
+	return nil
 }
 
 // Err returns the first error in the response, or nil if the request and every
 // statement succeeded. A request-level error is returned as is. A statement-level
-// error names the index of the failed statement.
+// error is a *StatementError wrapped with the index of the failed statement, so
+// use errors.As to retrieve it.
 func (qr *QueryResponse) Err() error {
 	if qr.Error != "" {
 		return errors.New(qr.Error)
@@ -163,13 +270,13 @@ func (qr *QueryResponse) Err() error {
 	switch v := qr.Results.(type) {
 	case []QueryResult:
 		for i, result := range v {
-			if result.Error != "" {
+			if result.Error != nil {
 				return statementError(i, result.Error)
 			}
 		}
 	case []QueryResultAssoc:
 		for i, result := range v {
-			if result.Error != "" {
+			if result.Error != nil {
 				return statementError(i, result.Error)
 			}
 		}
@@ -228,8 +335,25 @@ type RequestResult struct {
 	Values       [][]any  `json:"values"`
 	LastInsertID *int64   `json:"last_insert_id"`
 	RowsAffected *int64   `json:"rows_affected"`
-	Error        string   `json:"error,omitempty"`
 	Time         float64  `json:"time,omitempty"`
+
+	// Error is set if the statement failed.
+	Error *StatementError `json:"error_v2,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting both the legacy and
+// structured error fields.
+func (r *RequestResult) UnmarshalJSON(data []byte) error {
+	type Alias RequestResult
+	aux := struct {
+		*Alias
+		legacyError
+	}{Alias: (*Alias)(r)}
+	if err := decodeUseNumber(data, &aux); err != nil {
+		return err
+	}
+	r.Error = aux.merge(r.Error)
+	return nil
 }
 
 // RequestResultAssoc is an element of RequestResponse.Results, but in an associative form.
@@ -239,8 +363,25 @@ type RequestResultAssoc struct {
 	Rows         []map[string]any  `json:"rows"`
 	LastInsertID *int64            `json:"last_insert_id"`
 	RowsAffected *int64            `json:"rows_affected"`
-	Error        string            `json:"error,omitempty"`
 	Time         float64           `json:"time,omitempty"`
+
+	// Error is set if the statement failed.
+	Error *StatementError `json:"error_v2,omitempty"`
+}
+
+// UnmarshalJSON implements json.Unmarshaler, accepting both the legacy and
+// structured error fields.
+func (r *RequestResultAssoc) UnmarshalJSON(data []byte) error {
+	type Alias RequestResultAssoc
+	aux := struct {
+		*Alias
+		legacyError
+	}{Alias: (*Alias)(r)}
+	if err := decodeUseNumber(data, &aux); err != nil {
+		return err
+	}
+	r.Error = aux.merge(r.Error)
+	return nil
 }
 
 // GetRequestResults returns the results as a slice of RequestResult. This can be convenient
@@ -259,7 +400,8 @@ func (rr *RequestResponse) GetRequestResultsAssoc() []RequestResultAssoc {
 
 // Err returns the first error in the response, or nil if the request and every
 // statement succeeded. A request-level error is returned as is. A statement-level
-// error names the index of the failed statement.
+// error is a *StatementError wrapped with the index of the failed statement, so
+// use errors.As to retrieve it.
 func (rr *RequestResponse) Err() error {
 	if rr.Error != "" {
 		return errors.New(rr.Error)
@@ -267,24 +409,18 @@ func (rr *RequestResponse) Err() error {
 	switch v := rr.Results.(type) {
 	case []RequestResult:
 		for i, result := range v {
-			if result.Error != "" {
+			if result.Error != nil {
 				return statementError(i, result.Error)
 			}
 		}
 	case []RequestResultAssoc:
 		for i, result := range v {
-			if result.Error != "" {
+			if result.Error != nil {
 				return statementError(i, result.Error)
 			}
 		}
 	}
 	return nil
-}
-
-// statementError returns an error naming the statement at index i and why
-// it failed.
-func statementError(i int, msg string) error {
-	return fmt.Errorf("statement %d: %s", i, msg)
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for RequestResponse.
@@ -423,7 +559,8 @@ func (c *Client) SetBasicAuth(username, password string) {
 // errors, for example by calling Err on the response.
 //
 // However if this method is called with true, then the client will also return the
-// result of calling Err on the response, alongside the response itself.
+// result of calling Err on the response, alongside the response itself. Use errors.As
+// to retrieve the *StatementError from the returned error.
 func (c *Client) PromoteErrors(b bool) {
 	c.promoteErrors.Store(b)
 }
