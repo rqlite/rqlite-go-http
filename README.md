@@ -97,3 +97,29 @@ if !ok {
 }
 // n now holds the parsed big integer.
 ```
+
+## Handling errors
+A request can fail at two levels. Failures at the HTTP level, such as a node being unreachable or a `5xx` response, are always returned as a Go error. Failures at the database level, such as a constraint violation, are reported inside an HTTP `200` response. Call `Err()` on the response to check for them:
+
+```go
+resp, err := client.ExecuteSingle(ctx, "INSERT INTO foo(id) VALUES(1)")
+if err != nil {
+    log.Fatal(err) // HTTP-level failure.
+}
+if err := resp.Err(); err != nil {
+    log.Fatal(err) // Database-level failure, e.g. "statement 0: UNIQUE constraint failed: foo.id"
+}
+```
+
+Alternatively, call `client.PromoteErrors(true)` and the client will return the result of `Err()` alongside the response, so a single check covers both levels.
+
+A failed statement is reported as a `StatementError`, wrapped with the index of the statement that failed. Use `errors.As` to retrieve it. If the failure originated in SQLite, it also carries SQLite's [result codes](https://www.sqlite.org/rescode.html):
+
+```go
+var stmtErr *rqlitehttp.StatementError
+if errors.As(err, &stmtErr) && stmtErr.SQLite != nil {
+    fmt.Println(stmtErr.SQLite.Code, stmtErr.SQLite.ExtendedCode)
+}
+```
+
+The `Error` field on each result is also set to the `StatementError` for that statement, which is useful when a request contains many statements. The client decodes both the legacy `error` string and the structured `error_v2` object introduced in rqlite v10.6.0, so this works against any version of rqlite.

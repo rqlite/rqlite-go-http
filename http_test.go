@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -724,7 +725,7 @@ func Test_PromoteErrors(t *testing.T) {
 			w.Write([]byte(`{"error": "top level error"}`))
 			return
 		}
-		w.Write([]byte(`{"results": [{"error": "some error"}]}`))
+		w.Write([]byte(`{"results": [{"error_v2": {"message": "some error", "sqlite": {"code": 19, "extended_code": 2067}}}]}`))
 	}))
 	defer ts.Close()
 
@@ -747,19 +748,40 @@ func Test_PromoteErrors(t *testing.T) {
 		t.Fatalf("Expected nil error, got %v", err)
 	}
 
+	// checkErr verifies that err is a promoted error of the expected form.
+	checkErr := func(err error) {
+		t.Helper()
+		if err == nil {
+			t.Fatalf("Expected non-nil error after promoting errors, got nil")
+		}
+		var stmtErr *StatementError
+		if topLevelErr {
+			if err.Error() != "top level error" {
+				t.Fatalf("Expected top level error, got %v", err)
+			}
+			if errors.As(err, &stmtErr) {
+				t.Fatalf("Expected top level error not to be a StatementError, got %v", stmtErr)
+			}
+			return
+		}
+		if err.Error() != "statement 0: some error" {
+			t.Fatalf("Expected statement error, got %v", err)
+		}
+		if !errors.As(err, &stmtErr) {
+			t.Fatalf("Expected error to wrap a StatementError, got %T", err)
+		}
+		if stmtErr.SQLite == nil || stmtErr.SQLite.Code != 19 || stmtErr.SQLite.ExtendedCode != 2067 {
+			t.Fatalf("Unexpected SQLite error codes: %+v", stmtErr.SQLite)
+		}
+	}
+
 	testFn := func() {
 		_, err = client.Execute(context.Background(), nil, nil)
-		if err == nil {
-			t.Fatalf("Expected non-nil error after promoting errors, got nil")
-		}
+		checkErr(err)
 		_, err = client.Query(context.Background(), nil, nil)
-		if err == nil {
-			t.Fatalf("Expected non-nil error after promoting errors, got nil")
-		}
+		checkErr(err)
 		_, err = client.Request(context.Background(), nil, nil)
-		if err == nil {
-			t.Fatalf("Expected non-nil error after promoting errors, got nil")
-		}
+		checkErr(err)
 	}
 
 	client.PromoteErrors(true)
@@ -767,6 +789,166 @@ func Test_PromoteErrors(t *testing.T) {
 
 	topLevelErr = true
 	testFn()
+}
+
+// errResponse is implemented by every response type that can report an error.
+type errResponse interface {
+	Err() error
+}
+
+func Test_ResponseErr(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+
+		// want is the expected error text, empty if no error is expected.
+		want string
+
+		// statement is true if the error is expected to wrap a *StatementError.
+		statement bool
+
+		// sqlite is the expected SQLite error codes, if any.
+		sqlite *SQLiteError
+	}{
+		{
+			name: "no results",
+			body: `{}`,
+		},
+		{
+			name: "no error",
+			body: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+		},
+		{
+			name: "top level error",
+			body: `{"error":"not leader"}`,
+			want: "not leader",
+		},
+		{
+			name:      "legacy statement error",
+			body:      `{"results":[{"error":"no such table: foo"}]}`,
+			want:      "statement 0: no such table: foo",
+			statement: true,
+		},
+		{
+			name:      "legacy second statement error",
+			body:      `{"results":[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: foo"}]}`,
+			want:      "statement 1: no such table: foo",
+			statement: true,
+		},
+		{
+			name:      "both error forms",
+			body:      `{"results":[{"error":"no such table: foo","error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]}`,
+			want:      "statement 0: no such table: foo",
+			statement: true,
+			sqlite:    &SQLiteError{Code: 1, ExtendedCode: 1},
+		},
+		{
+			name:      "structured statement error",
+			body:      `{"results":[{"error_v2":{"message":"unique constraint failed","sqlite":{"code":19,"extended_code":2067}}}]}`,
+			want:      "statement 0: unique constraint failed",
+			statement: true,
+			sqlite:    &SQLiteError{Code: 19, ExtendedCode: 2067},
+		},
+		{
+			name:      "structured statement error without sqlite",
+			body:      `{"results":[{"error_v2":{"message":"query timeout"}}]}`,
+			want:      "statement 0: query timeout",
+			statement: true,
+		},
+		{
+			name:      "structured second statement error",
+			body:      `{"results":[{"last_insert_id":1,"rows_affected":1},{"error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]}`,
+			want:      "statement 1: no such table: foo",
+			statement: true,
+			sqlite:    &SQLiteError{Code: 1, ExtendedCode: 1},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, resp := range []errResponse{&ExecuteResponse{}, &QueryResponse{}, &RequestResponse{}} {
+				if err := json.Unmarshal([]byte(tt.body), resp); err != nil {
+					t.Fatalf("%T: unexpected error unmarshalling body: %v", resp, err)
+				}
+				err := resp.Err()
+				if tt.want == "" {
+					if err != nil {
+						t.Fatalf("%T: expected nil error, got %v", resp, err)
+					}
+					continue
+				}
+				if err == nil || err.Error() != tt.want {
+					t.Fatalf("%T: expected error %q, got %v", resp, tt.want, err)
+				}
+
+				var stmtErr *StatementError
+				if errors.As(err, &stmtErr) != tt.statement {
+					t.Fatalf("%T: expected StatementError=%v, got %T", resp, tt.statement, err)
+				}
+				if stmtErr != nil && !reflect.DeepEqual(stmtErr.SQLite, tt.sqlite) {
+					t.Fatalf("%T: expected SQLite codes %+v, got %+v", resp, tt.sqlite, stmtErr.SQLite)
+				}
+			}
+		})
+	}
+}
+
+func Test_ResponseErr_Associative(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+	}{
+		{
+			name: "legacy",
+			body: `{"results":[{"types":{"id":"integer"},"rows":[{"id":1}]},{"error":"no such table: foo"}]}`,
+		},
+		{
+			name: "structured",
+			body: `{"results":[{"types":{"id":"integer"},"rows":[{"id":1}]},{"error_v2":{"message":"no such table: foo","sqlite":{"code":1,"extended_code":1}}}]}`,
+		},
+	}
+	want := "statement 1: no such table: foo"
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, resp := range []errResponse{&QueryResponse{}, &RequestResponse{}} {
+				if err := json.Unmarshal([]byte(tt.body), resp); err != nil {
+					t.Fatalf("%T: unexpected error unmarshalling body: %v", resp, err)
+				}
+				if err := resp.Err(); err == nil || err.Error() != want {
+					t.Fatalf("%T: expected error %q, got %v", resp, want, err)
+				}
+			}
+		})
+	}
+}
+
+// Test_ResultError_Decoding checks that the Error field on each result type is
+// populated from whichever error form the server sent, and that numeric values
+// alongside it are still decoded as json.Number.
+func Test_ResultError_Decoding(t *testing.T) {
+	body := `{"results":[{"columns":["id"],"types":["integer"],"values":[[1]]},{"error":"legacy"},{"error_v2":{"message":"structured","sqlite":{"code":1,"extended_code":1}}}]}`
+
+	var resp QueryResponse
+	if err := json.Unmarshal([]byte(body), &resp); err != nil {
+		t.Fatalf("unexpected error unmarshalling body: %v", err)
+	}
+	results := resp.GetQueryResults()
+	if len(results) != 3 {
+		t.Fatalf("expected 3 results, got %d", len(results))
+	}
+	if results[0].Error != nil {
+		t.Fatalf("expected no error on first result, got %v", results[0].Error)
+	}
+	if _, ok := results[0].Values[0][0].(json.Number); !ok {
+		t.Fatalf("expected json.Number, got %T", results[0].Values[0][0])
+	}
+	if results[1].Error == nil || results[1].Error.Message != "legacy" || results[1].Error.SQLite != nil {
+		t.Fatalf("unexpected error on second result: %+v", results[1].Error)
+	}
+	if results[2].Error == nil || results[2].Error.Message != "structured" || results[2].Error.SQLite == nil {
+		t.Fatalf("unexpected error on third result: %+v", results[2].Error)
+	}
 }
 
 func Test_Load_SQL(t *testing.T) {

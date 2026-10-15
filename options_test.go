@@ -256,3 +256,31 @@ func Test_RaftIndexOptions(t *testing.T) {
 		}
 	})
 }
+
+func Test_ErrorsOptions(t *testing.T) {
+	tests := []struct {
+		name string
+		opts any
+		want string
+	}{
+		{"ExecuteOptions_V1", &ExecuteOptions{Errors: ErrorFormatV1}, "v1"},
+		{"ExecuteOptions_V2", &ExecuteOptions{Errors: ErrorFormatV2}, "v2"},
+		{"QueryOptions_V2", &QueryOptions{Errors: ErrorFormatV2}, "v2"},
+		{"RequestOptions_V2", &RequestOptions{Errors: ErrorFormatV2}, "v2"},
+		{"ExecuteOptions_OmitEmpty", &ExecuteOptions{}, ""},
+		{"QueryOptions_OmitEmpty", &QueryOptions{}, ""},
+		{"RequestOptions_OmitEmpty", &RequestOptions{}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vals, err := makeURLValues(tt.opts)
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got := vals.Get("errors"); got != tt.want {
+				t.Errorf("expected errors=%q, got %q", tt.want, got)
+			}
+		})
+	}
+}
