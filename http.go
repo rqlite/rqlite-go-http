@@ -6,6 +6,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"maps"
@@ -95,19 +96,19 @@ type ExecuteResponse struct {
 	RaftIndex      int64           `json:"raft_index,omitempty"`
 }
 
-// HasError returns true if any of the results in the response contain an error.
-// If an error is found, the index of the result and the error message are returned.
-func (er *ExecuteResponse) HasError() (bool, int, string) {
+// Err returns the first error in the response, or nil if the request and every
+// statement succeeded. A request-level error is returned as is. A statement-level
+// error names the index of the failed statement.
+func (er *ExecuteResponse) Err() error {
 	if er.Error != "" {
-		return true, -1, er.Error
+		return errors.New(er.Error)
 	}
-
 	for i, result := range er.Results {
 		if result.Error != "" {
-			return true, i, result.Error
+			return statementError(i, result.Error)
 		}
 	}
-	return false, -1, ""
+	return nil
 }
 
 // ExecuteResult is an element of ExecuteResponse.Results.
@@ -152,28 +153,28 @@ type QueryResultAssoc struct {
 	Error string            `json:"error,omitempty"`
 }
 
-// HasError returns true if any of the results in the response contain an error.
-// If an error is found, the index of the result and the error message are returned.
-func (qr *QueryResponse) HasError() (bool, int, string) {
+// Err returns the first error in the response, or nil if the request and every
+// statement succeeded. A request-level error is returned as is. A statement-level
+// error names the index of the failed statement.
+func (qr *QueryResponse) Err() error {
 	if qr.Error != "" {
-		return true, -1, qr.Error
+		return errors.New(qr.Error)
 	}
-
 	switch v := qr.Results.(type) {
 	case []QueryResult:
 		for i, result := range v {
 			if result.Error != "" {
-				return true, i, result.Error
+				return statementError(i, result.Error)
 			}
 		}
 	case []QueryResultAssoc:
 		for i, result := range v {
 			if result.Error != "" {
-				return true, i, result.Error
+				return statementError(i, result.Error)
 			}
 		}
 	}
-	return false, -1, ""
+	return nil
 }
 
 // GetQueryResults returns the results as a slice of QueryResult. This can be convenient
@@ -256,28 +257,34 @@ func (rr *RequestResponse) GetRequestResultsAssoc() []RequestResultAssoc {
 	return rr.Results.([]RequestResultAssoc)
 }
 
-// HasError returns true if any of the results in the response contain an error.
-// If an error is found, the index of the result and the error message are returned.
-func (rr *RequestResponse) HasError() (bool, int, string) {
+// Err returns the first error in the response, or nil if the request and every
+// statement succeeded. A request-level error is returned as is. A statement-level
+// error names the index of the failed statement.
+func (rr *RequestResponse) Err() error {
 	if rr.Error != "" {
-		return true, -1, rr.Error
+		return errors.New(rr.Error)
 	}
-
 	switch v := rr.Results.(type) {
 	case []RequestResult:
 		for i, result := range v {
 			if result.Error != "" {
-				return true, i, result.Error
+				return statementError(i, result.Error)
 			}
 		}
 	case []RequestResultAssoc:
 		for i, result := range v {
 			if result.Error != "" {
-				return true, i, result.Error
+				return statementError(i, result.Error)
 			}
 		}
 	}
-	return false, -1, ""
+	return nil
+}
+
+// statementError returns an error naming the statement at index i and why
+// it failed.
+func statementError(i int, msg string) error {
+	return fmt.Errorf("statement %d: %s", i, msg)
 }
 
 // UnmarshalJSON implements the json.Unmarshaler interface for RequestResponse.
@@ -413,11 +420,10 @@ func (c *Client) SetBasicAuth(username, password string) {
 //
 // By default an operation on the client only returns an error if there is a failure at
 // the HTTP level and it is up to the caller to inspect the response body for statement-level
-// errors.
+// errors, for example by calling Err on the response.
 //
-// However if this method is called with true, then the client will also inspect the response
-// body and return an error if there is any failure at the statement level, setting the returned
-// error to the first statement-level error encountered.
+// However if this method is called with true, then the client will also return the
+// result of calling Err on the response, alongside the response itself.
 func (c *Client) PromoteErrors(b bool) {
 	c.promoteErrors.Store(b)
 }
@@ -467,13 +473,10 @@ func (c *Client) Execute(ctx context.Context, statements SQLStatements, opts *Ex
 		return nil, err
 	}
 
-	var retErr error
 	if c.promoteErrors.Load() {
-		if f, i, msg := executeResp.HasError(); f {
-			retErr = fmt.Errorf("statement %d: %s", i, msg)
-		}
+		return &executeResp, executeResp.Err()
 	}
-	return &executeResp, retErr
+	return &executeResp, nil
 }
 
 // QuerySingle performs a single read operation (SELECT) using /db/query.
@@ -520,13 +523,10 @@ func (c *Client) Query(ctx context.Context, statements SQLStatements, opts *Quer
 	if err := dec.Decode(&queryResponse); err != nil {
 		return nil, err
 	}
-	var retErr error
 	if c.promoteErrors.Load() {
-		if f, i, msg := queryResponse.HasError(); f {
-			retErr = fmt.Errorf("statement %d: %s", i, msg)
-		}
+		return &queryResponse, queryResponse.Err()
 	}
-	return &queryResponse, retErr
+	return &queryResponse, nil
 }
 
 // RequestSingle sends a single statement, which can be either a read or write.
@@ -574,13 +574,10 @@ func (c *Client) Request(ctx context.Context, statements SQLStatements, opts *Re
 	if err := dec.Decode(&reqResp); err != nil {
 		return nil, err
 	}
-	var retErr error
 	if c.promoteErrors.Load() {
-		if f, i, msg := reqResp.HasError(); f {
-			retErr = fmt.Errorf("statement %d: %s", i, msg)
-		}
+		return &reqResp, reqResp.Err()
 	}
-	return &reqResp, retErr
+	return &reqResp, nil
 }
 
 // Backup requests a copy of the SQLite database from the node. opts may be nil, in which case

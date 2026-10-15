@@ -769,6 +769,77 @@ func Test_PromoteErrors(t *testing.T) {
 	testFn()
 }
 
+// errResponse is implemented by every response type that can report an error.
+type errResponse interface {
+	Err() error
+}
+
+func Test_ResponseErr(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string // Expected error text, empty if no error is expected.
+	}{
+		{
+			name: "no results",
+			body: `{}`,
+		},
+		{
+			name: "no error",
+			body: `{"results":[{"last_insert_id":1,"rows_affected":1}]}`,
+		},
+		{
+			name: "top level error",
+			body: `{"error":"not leader"}`,
+			want: "not leader",
+		},
+		{
+			name: "statement error",
+			body: `{"results":[{"error":"no such table: foo"}]}`,
+			want: "statement 0: no such table: foo",
+		},
+		{
+			name: "second statement error",
+			body: `{"results":[{"last_insert_id":1,"rows_affected":1},{"error":"no such table: foo"}]}`,
+			want: "statement 1: no such table: foo",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, resp := range []errResponse{&ExecuteResponse{}, &QueryResponse{}, &RequestResponse{}} {
+				if err := json.Unmarshal([]byte(tt.body), resp); err != nil {
+					t.Fatalf("%T: unexpected error unmarshalling body: %v", resp, err)
+				}
+				err := resp.Err()
+				if tt.want == "" {
+					if err != nil {
+						t.Fatalf("%T: expected nil error, got %v", resp, err)
+					}
+					continue
+				}
+				if err == nil || err.Error() != tt.want {
+					t.Fatalf("%T: expected error %q, got %v", resp, tt.want, err)
+				}
+			}
+		})
+	}
+}
+
+func Test_ResponseErr_Associative(t *testing.T) {
+	body := `{"results":[{"types":{"id":"integer"},"rows":[{"id":1}]},{"error":"no such table: foo"}]}`
+	want := "statement 1: no such table: foo"
+
+	for _, resp := range []errResponse{&QueryResponse{}, &RequestResponse{}} {
+		if err := json.Unmarshal([]byte(body), resp); err != nil {
+			t.Fatalf("%T: unexpected error unmarshalling body: %v", resp, err)
+		}
+		if err := resp.Err(); err == nil || err.Error() != want {
+			t.Fatalf("%T: expected error %q, got %v", resp, want, err)
+		}
+	}
+}
+
 func Test_Load_SQL(t *testing.T) {
 	expectedData := []byte(`CREATE TABLE foo (id INTEGER NOT NULL PRIMARY KEY, name TEXT)`)
 
